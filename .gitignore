@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific
+service/logs/
+service/data/
+ml/models/*.joblib
+ml/models/*.pkl
+ml/models/*.onnx
+!ml/models/.gitkeep
+ingestion/sample_data/*
+!ingestion/sample_data/.gitkeep
+
+# Docker
+docker-compose.override.yml
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Database dumps
+*.sql.gz
+*.dump

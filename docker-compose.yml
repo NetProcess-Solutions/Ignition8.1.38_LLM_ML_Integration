@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: ignition_chatbot_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ignition_chatbot}
+      POSTGRES_USER: ${POSTGRES_USER:-chatbot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/setup_database.sql:/docker-entrypoint-initdb.d/01_setup_database.sql:ro
+      - ./scripts/seed_reference_data.sql:/docker-entrypoint-initdb.d/02_seed_reference_data.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-chatbot} -d ${POSTGRES_DB:-ignition_chatbot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ai-service:
+    build:
+      context: ./service
+      dockerfile: Dockerfile
+    container_name: ignition_chatbot_service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-chatbot}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-ignition_chatbot}
+      SERVICE_HOST: 0.0.0.0
+      SERVICE_PORT: 8000
+      SERVICE_LOG_LEVEL: ${SERVICE_LOG_LEVEL:-INFO}
+      SERVICE_ENV: ${SERVICE_ENV:-development}
+      API_KEY: ${API_KEY}
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0.1}
+      OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS:-1500}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-}
+      AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION:-2024-08-01-preview}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-384}
+      RETRIEVAL_TOP_K: ${RETRIEVAL_TOP_K:-10}
+      RETRIEVAL_MIN_SCORE: ${RETRIEVAL_MIN_SCORE:-0.30}
+      RETRIEVAL_RECENT_EVENTS_HOURS: ${RETRIEVAL_RECENT_EVENTS_HOURS:-72}
+      MEMORY_TOP_K: ${MEMORY_TOP_K:-5}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./service:/app
+      - model_cache:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/api/health\").read()'"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  postgres_data:
+  model_cache:

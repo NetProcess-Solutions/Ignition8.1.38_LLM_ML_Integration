@@ -1,0 +1,50 @@
+# Deterministic business rules for Coater 1.
+# Loaded into the business_rules table by scripts/seed_initial_data.py.
+# Edit, then re-run the seed script to update.
+#
+# Condition shape:
+#   all:  every clause must match
+#   any:  at least one clause must match
+# Clause shape:
+#   { tag: <tag name as it appears in CuratedContextPackage>,
+#     op:  > | >= | < | <= | == | !=,
+#     value: <number, string, or boolean> }
+
+rules:
+  - rule_name: zone3_overshoot_high_speed
+    line_id: coater1
+    severity: warning
+    category: quality_risk
+    condition:
+      all:
+        - { tag: ZoneTemp3, op: ">", value: 425 }
+        - { tag: LineSpeed, op: ">", value: 250 }
+    conclusion: |
+      Zone 3 temperature is above 425 F at line speed > 250 fpm. This
+      combination has been associated with delamination risk on coated
+      products. Recommend reviewing recent quality results and considering
+      a slower line speed or zone setpoint reduction (engineer decision).
+
+  - rule_name: coating_weight_deviation
+    line_id: coater1
+    severity: warning
+    category: quality_risk
+    condition:
+      any:
+        - { tag: CoatingWeightDeviationPct, op: ">", value: 5 }
+        - { tag: CoatingWeightDeviationPct, op: "<", value: -5 }
+    conclusion: |
+      Coating weight is more than 5% off target. Inspect feed rate,
+      applicator condition, and recent recipe changes.
+
+  - rule_name: high_vibration_drive
+    line_id: coater1
+    severity: critical
+    category: equipment_protection
+    condition:
+      all:
+        - { tag: DriveVibration, op: ">", value: 5.0 }
+    conclusion: |
+      Drive vibration is above the critical threshold (5.0 mm/s).
+      This is a known precursor to bearing failure. Maintenance review
+      recommended.
