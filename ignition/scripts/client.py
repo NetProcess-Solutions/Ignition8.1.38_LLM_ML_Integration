@@ -55,16 +55,20 @@ def postJson(path, payload):
     return _post(path, payload)
 
 
-def sendQuery(userMessage, sessionId, userId, lineId=None, conversationId=None):
+def sendQuery(userMessage, sessionId, userId, lineId=None, conversationId=None,
+              anchorTime=None, attachedClips=None):
     """
     Sends a chat query along with the curated live context to the AI service.
+    Optional kwargs (design v2.0):
+      anchorTime    : ISO-8601 string. Attached as live_context.anchor.anchor_time;
+                      the orchestrator's anchor parser uses it as the resolved time.
+      attachedClips : list of dicts with keys event_id/clip_start/clip_end/
+                      camera_id/storage_handle (matches CameraClipRef schema).
     Returns a dict like:
         { ok: True/False, data: {...response...}, error: '...' }
     """
     import ai.context as context
     line = lineId or cfg.LINE_ID
-    # Pre-screen: ask the service which tags are likely relevant so we don't
-    # read/historian-query all 80+ on every call.
     selected = None
     if getattr(cfg, "USE_TAG_SELECTOR", False):
         try:
@@ -74,6 +78,14 @@ def sendQuery(userMessage, sessionId, userId, lineId=None, conversationId=None):
             _log.warn("tag selector failed, sending core-only: %s" % str(e))
             selected = None
     live = context.buildCuratedContext(line, selectedTagNames=selected)
+    if attachedClips:
+        live["attached_clips"] = attachedClips
+    if anchorTime:
+        live["anchor"] = {
+            "anchor_type": "past_event",
+            "anchor_time": anchorTime,
+            "anchor_status": "resolved",
+        }
     payload = {
         "query":         userMessage,
         "session_id":    sessionId,
@@ -130,3 +142,20 @@ def linkOutcome(messageId, outcomeType, outcomeId, outcomeTable, alignment,
     if notes:
         payload["notes"] = notes
     return _post("/api/outcomes", payload)
+
+
+def confirmRootCause(messageId, userId, defectEventId, confirmed, notes=None):
+    """
+    Operator clicked "Root cause confirmed?" on a chat answer. Records the
+    confirmation as an outcome linkage so the same scenario in the future
+    weighs MEMORY higher (design v2.0 section 4.4).
+    """
+    return linkOutcome(
+        messageId=messageId,
+        outcomeType="root_cause_confirmation",
+        outcomeId=str(defectEventId),
+        outcomeTable="defect_events",
+        alignment="confirmed" if confirmed else "rejected",
+        linkedBy=userId,
+        notes=notes,
+    )

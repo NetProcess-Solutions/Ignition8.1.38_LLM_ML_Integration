@@ -48,3 +48,56 @@ rules:
       Drive vibration is above the critical threshold (5.0 mm/s).
       This is a known precursor to bearing failure. Maintenance review
       recommended.
+
+  # ---- v2.0 additions ------------------------------------------------------
+
+  - rule_name: oven_imbalance_zone1_zone2
+    line_id: coater1
+    severity: warning
+    category: quality_risk
+    condition:
+      any:
+        - { tag: ZoneTempDelta_1_2, op: ">", value: 25 }
+        - { tag: ZoneTempDelta_1_2, op: "<", value: -25 }
+    conclusion: |
+      Zone 1 to Zone 2 temperature delta exceeds 25 F. This imbalance
+      has historically correlated with off-tenter edge fold defects on
+      wide product styles. Verify burner staging and recirculation fans.
+
+  - rule_name: precoat_bubble_precursor
+    line_id: coater1
+    severity: warning
+    category: quality_risk
+    condition:
+      all:
+        - { tag: PrecoatViscosity, op: "<", value: 1100 }
+        - { tag: PrecoatTemperature, op: ">", value: 95 }
+    conclusion: |
+      Precoat viscosity is low while precoat temperature is elevated.
+      The bubble_precoat failure mode often appears under these
+      conditions within 30 minutes. Check chiller and dilution pump.
+
+  - rule_name: front_step_setpoint_jump
+    line_id: coater1
+    severity: info
+    category: process_change
+    condition:
+      all:
+        - { tag: FrontStepChangeAbs, op: ">", value: 10 }
+    conclusion: |
+      Front step setpoint changed by more than 10 units in the last
+      production run. Subsequent quality results should be tagged for
+      style-step learning until two stable runs confirm.
+
+  - rule_name: cw_out_of_spec_persistent
+    line_id: coater1
+    severity: critical
+    category: quality_risk
+    condition:
+      all:
+        - { tag: CoatingWeightOutOfSpecRunCount, op: ">=", value: 3 }
+    conclusion: |
+      Three or more consecutive coating-weight readings are out of
+      spec. Production should pause for root-cause review; this
+      pattern is the dominant precursor to the cw_out_of_spec
+      failure mode.

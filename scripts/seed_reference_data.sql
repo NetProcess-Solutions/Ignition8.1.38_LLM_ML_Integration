@@ -1,74 +1,102 @@
 -- =============================================================================
--- Reference data: role permissions matrix.
--- Domain data (user profiles, line memory, rules) is seeded by
--- scripts/seed_initial_data.py after the service is up so we can use the
--- embedding model.
+-- IgnitionChatbot v2.0 reference data seed
+-- Runs once at first DB init via docker-entrypoint-initdb.d/02_*.
+-- Application-data seeds (memories, prompts, rules) live in
+-- service/scripts/seed_initial_data.py and run after the embedding model
+-- is available.
 -- =============================================================================
 
+-- ----------------------------------------------------------------------------
+-- failure_modes (closed enum, design §4.3 taxonomy discipline note)
+-- Adding a new mode here is the only way defect_events.failure_mode can
+-- accept it (FK is RESTRICT). Initial set drawn from the design's
+-- examples; expand via Task 9 from real DELAM/QR records.
+-- ----------------------------------------------------------------------------
+INSERT INTO failure_modes (code, label, defect_type, description) VALUES
+    ('delam_hotpull',       'Delamination (hot pull)',         'delamination',         'Bond failure detected on hot-pull lab test'),
+    ('delam_cold',          'Delamination (cold)',             'delamination',         'Bond failure visible at ambient temperature'),
+    ('off_tenter_edge_fold','Off-tenter, edge fold',           'off_tenter',           'Edge fold under tenter clip'),
+    ('bubble_adhesive',     'Bubble (adhesive layer)',         'bubbling',             'Air entrapment in adhesive (Tillitson) layer'),
+    ('bubble_precoat',      'Bubble (precoat layer)',          'bubbling',             'Air entrapment in precoat (DirectApplicator) layer'),
+    ('streak_frontback',    'Streak (front-back)',             'discoloration',        'Front-to-back streak in coating'),
+    ('cw_out_of_spec',      'Coating weight out of spec',      'thickness_deviation',  'Inline or lab CW measurement outside spec'),
+    ('contamination_other', 'Contamination (other)',           'contamination',        'Contamination not classified elsewhere'),
+    ('other',               'Other / unclassified',            'other',                'Catch-all; should be re-classified by engineer review')
+ON CONFLICT (code) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
+-- user_permissions matrix (design §4.6)
+-- ----------------------------------------------------------------------------
 INSERT INTO user_permissions (role, permission, granted) VALUES
-    ('operator',   'chat.ask',                  TRUE),
-    ('operator',   'feedback.usefulness',       TRUE),
-    ('operator',   'correction.submit',         TRUE),
-    ('operator',   'memory.view_approved',      TRUE),
-
-    ('engineer',   'chat.ask',                  TRUE),
-    ('engineer',   'feedback.usefulness',       TRUE),
-    ('engineer',   'feedback.correctness',      TRUE),
-    ('engineer',   'feedback.root_cause',       TRUE),
-    ('engineer',   'correction.submit',         TRUE),
-    ('engineer',   'correction.review',         TRUE),
-    ('engineer',   'memory.view_approved',      TRUE),
-    ('engineer',   'memory.view_drafts',        TRUE),
-    ('engineer',   'memory.create',             TRUE),
-    ('engineer',   'memory.approve',            TRUE),
-    ('engineer',   'memory.deprecate',          TRUE),
-    ('engineer',   'ml.view_predictions',       TRUE),
-    ('engineer',   'admin.audit_view',          TRUE),
-
-    ('maintenance','chat.ask',                  TRUE),
-    ('maintenance','feedback.usefulness',       TRUE),
-    ('maintenance','feedback.correctness',      TRUE),
-    ('maintenance','feedback.root_cause',       TRUE),
-    ('maintenance','correction.submit',         TRUE),
-    ('maintenance','memory.view_approved',      TRUE),
-    ('maintenance','memory.create',             TRUE),
-
-    ('quality',    'chat.ask',                  TRUE),
-    ('quality',    'feedback.usefulness',       TRUE),
-    ('quality',    'feedback.correctness',      TRUE),
-    ('quality',    'feedback.root_cause',       TRUE),
-    ('quality',    'correction.submit',         TRUE),
-    ('quality',    'correction.review',         TRUE),
-    ('quality',    'memory.view_approved',      TRUE),
-    ('quality',    'memory.create',             TRUE),
-    ('quality',    'memory.approve',            TRUE),
-    ('quality',    'ml.view_predictions',       TRUE),
-
-    ('supervisor', 'chat.ask',                  TRUE),
-    ('supervisor', 'feedback.usefulness',       TRUE),
-    ('supervisor', 'correction.submit',         TRUE),
-    ('supervisor', 'memory.view_approved',      TRUE),
-    ('supervisor', 'ml.view_predictions',       TRUE),
-    ('supervisor', 'admin.audit_view',          TRUE),
-
-    ('manager',    'chat.ask',                  TRUE),
-    ('manager',    'feedback.usefulness',       TRUE),
-    ('manager',    'memory.view_approved',      TRUE),
-    ('manager',    'ml.view_predictions',       TRUE),
-
-    ('admin',      'chat.ask',                  TRUE),
-    ('admin',      'feedback.usefulness',       TRUE),
-    ('admin',      'feedback.correctness',      TRUE),
-    ('admin',      'feedback.root_cause',       TRUE),
-    ('admin',      'correction.submit',         TRUE),
-    ('admin',      'correction.review',         TRUE),
-    ('admin',      'memory.view_approved',      TRUE),
-    ('admin',      'memory.view_drafts',        TRUE),
-    ('admin',      'memory.create',             TRUE),
-    ('admin',      'memory.approve',            TRUE),
-    ('admin',      'memory.deprecate',          TRUE),
-    ('admin',      'ml.view_predictions',       TRUE),
-    ('admin',      'admin.ingest',              TRUE),
-    ('admin',      'admin.retrain',             TRUE),
-    ('admin',      'admin.audit_view',          TRUE)
+    -- chat.ask: everyone
+    ('operator',    'chat.ask',               TRUE),
+    ('engineer',    'chat.ask',               TRUE),
+    ('maintenance', 'chat.ask',               TRUE),
+    ('quality',     'chat.ask',               TRUE),
+    ('supervisor',  'chat.ask',               TRUE),
+    ('manager',     'chat.ask',               TRUE),
+    ('admin',       'chat.ask',               TRUE),
+    -- feedback.usefulness: everyone
+    ('operator',    'feedback.usefulness',    TRUE),
+    ('engineer',    'feedback.usefulness',    TRUE),
+    ('maintenance', 'feedback.usefulness',    TRUE),
+    ('quality',     'feedback.usefulness',    TRUE),
+    ('supervisor',  'feedback.usefulness',    TRUE),
+    ('manager',     'feedback.usefulness',    TRUE),
+    ('admin',       'feedback.usefulness',    TRUE),
+    -- feedback.correctness: not operators
+    ('engineer',    'feedback.correctness',   TRUE),
+    ('maintenance', 'feedback.correctness',   TRUE),
+    ('quality',     'feedback.correctness',   TRUE),
+    ('supervisor',  'feedback.correctness',   TRUE),
+    ('manager',     'feedback.correctness',   TRUE),
+    ('admin',       'feedback.correctness',   TRUE),
+    -- feedback.root_cause
+    ('engineer',    'feedback.root_cause',    TRUE),
+    ('maintenance', 'feedback.root_cause',    TRUE),
+    ('quality',     'feedback.root_cause',    TRUE),
+    ('admin',       'feedback.root_cause',    TRUE),
+    -- correction.submit: everyone
+    ('operator',    'correction.submit',      TRUE),
+    ('engineer',    'correction.submit',      TRUE),
+    ('maintenance', 'correction.submit',      TRUE),
+    ('quality',     'correction.submit',      TRUE),
+    ('supervisor',  'correction.submit',      TRUE),
+    ('manager',     'correction.submit',      TRUE),
+    ('admin',       'correction.submit',      TRUE),
+    -- correction.review: engineer/quality/admin
+    ('engineer',    'correction.review',      TRUE),
+    ('quality',     'correction.review',      TRUE),
+    ('admin',       'correction.review',      TRUE),
+    -- memory
+    ('operator',    'memory.view_approved',   TRUE),
+    ('engineer',    'memory.view_approved',   TRUE),
+    ('maintenance', 'memory.view_approved',   TRUE),
+    ('quality',     'memory.view_approved',   TRUE),
+    ('supervisor',  'memory.view_approved',   TRUE),
+    ('manager',     'memory.view_approved',   TRUE),
+    ('admin',       'memory.view_approved',   TRUE),
+    ('engineer',    'memory.view_drafts',     TRUE),
+    ('admin',       'memory.view_drafts',     TRUE),
+    ('engineer',    'memory.create',          TRUE),
+    ('maintenance', 'memory.create',          TRUE),
+    ('quality',     'memory.create',          TRUE),
+    ('admin',       'memory.create',          TRUE),
+    ('engineer',    'memory.approve',         TRUE),
+    ('quality',     'memory.approve',         TRUE),
+    ('admin',       'memory.approve',         TRUE),
+    ('engineer',    'memory.deprecate',       TRUE),
+    ('admin',       'memory.deprecate',       TRUE),
+    -- ml.view_predictions
+    ('engineer',    'ml.view_predictions',    TRUE),
+    ('quality',     'ml.view_predictions',    TRUE),
+    ('supervisor',  'ml.view_predictions',    TRUE),
+    ('manager',     'ml.view_predictions',    TRUE),
+    ('admin',       'ml.view_predictions',    TRUE),
+    -- admin
+    ('admin',       'admin.ingest',           TRUE),
+    ('admin',       'admin.retrain',          TRUE),
+    ('engineer',    'admin.audit_view',       TRUE),
+    ('supervisor',  'admin.audit_view',       TRUE),
+    ('admin',       'admin.audit_view',       TRUE)
 ON CONFLICT (role, permission) DO NOTHING;

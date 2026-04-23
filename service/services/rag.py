@@ -9,8 +9,16 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import get_settings
-from models.schemas import ChatRequest, ChatResponse, SourceCitation
+from models.schemas import (
+    AnchorType,
+    BucketExclusion,
+    ChatRequest,
+    ChatResponse,
+    QueryAnchor,
+    SourceCitation,
+)
 from services import retrieval
+from services.anchor import is_control_command, resolve_anchor
 from services.audit import write_audit, _json_safe
 from services.context_assembler import (
     assemble_prompt,
@@ -190,6 +198,42 @@ async def _insert_message(
     return msg_id
 
 
+async def _short_circuit_refusal(
+    session: AsyncSession,
+    conversation_id: UUID,
+    req: ChatRequest,
+    *,
+    reason: str,
+    text_: str,
+    anchor: QueryAnchor | None,
+) -> tuple[UUID, str]:
+    """Persist an assistant message that didn't go through the LLM, and audit it."""
+    msg_id = await _insert_message(
+        session,
+        conversation_id=conversation_id,
+        role="assistant",
+        content=text_,
+        sources=[],
+        confidence="insufficient_evidence",
+        context_snapshot={
+            "short_circuit": reason,
+            "parsed_anchor": anchor.model_dump(mode="json") if anchor else None,
+        },
+        prompt_version="(short_circuit)",
+        model_name="(none)",
+    )
+    await write_audit(
+        session,
+        event_type="chat_query",
+        user_id=req.user_id,
+        session_id=req.session_id,
+        entity_type="message",
+        entity_id=str(msg_id),
+        details={"short_circuit": reason},
+    )
+    return msg_id, text_
+
+
 async def handle_chat(session: AsyncSession, req: ChatRequest) -> ChatResponse:
     settings = get_settings()
     t0 = time.perf_counter()
@@ -216,15 +260,94 @@ async def handle_chat(session: AsyncSession, req: ChatRequest) -> ChatResponse:
     # Drop the message we just inserted from the history we send to the LLM
     history = [(r, c) for r, c in history if c != req.query][-6:]
 
+    # --- Anchor resolution (design §3.1–3.2) -----------------------------
+    # Prefer a client-provided anchor (when the gateway has already disambiguated
+    # via the clarification UI). Otherwise parse rule-based.
+    anchor: QueryAnchor = req.live_context.anchor or resolve_anchor(req.query)
+    # Mutate the curated package so downstream assembly sees the resolved anchor.
+    req.live_context.anchor = anchor
+
+    # Control-command refusal short-circuit (design §3.8 case b)
+    if is_control_command(req.query):
+        msg_id, response_text = await _short_circuit_refusal(
+            session, conversation_id, req,
+            reason="control_command",
+            text_=(
+                "I'm read-only and advisory — I won't issue control actions or "
+                "setpoint changes. I can describe trade-offs of a hypothetical "
+                "change if you re-phrase your question.\n\n"
+                "CONFIDENCE: INSUFFICIENT_EVIDENCE"
+            ),
+            anchor=anchor,
+        )
+        return ChatResponse(
+            message_id=msg_id, conversation_id=conversation_id,
+            response=response_text, sources=[],
+            confidence="insufficient_evidence",
+            context_summary={"short_circuit": 1, "reason_control_command": 1},
+            processing_time_ms=int((time.perf_counter() - t0) * 1000),
+            prompt_version="(short_circuit)", model_name="(none)",
+        )
+
+    # If the parser flagged a clarification need, ask the user instead of
+    # calling the LLM. The Perspective UI renders clarification_options as
+    # tappable buttons.
+    if anchor.anchor_status != "resolved":
+        msg_id, response_text = await _short_circuit_refusal(
+            session, conversation_id, req,
+            reason=anchor.anchor_status,
+            text_=anchor.clarification_prompt or (
+                "I need a bit more context to answer this. Could you tell me "
+                "whether you mean a specific past event, current state, or a "
+                "recurring pattern? A date, run number (R-YYYYMMDD-NN), or "
+                "sample ID (QR-NNNNN) would help."
+            ),
+            anchor=anchor,
+        )
+        return ChatResponse(
+            message_id=msg_id, conversation_id=conversation_id,
+            response=response_text, sources=[],
+            confidence="insufficient_evidence",
+            context_summary={"clarification_required": 1},
+            processing_time_ms=int((time.perf_counter() - t0) * 1000),
+            prompt_version="(clarification)", model_name="(none)",
+        )
+
     # --- Retrieval -------------------------------------------------------
     t_retr = time.perf_counter()
     query_vec = await embed_one(req.query)
     chunks = await retrieval.retrieve_chunks(session, query_vec, req.line_id)
-    events = await retrieval.retrieve_recent_events(session, req.line_id)
+
+    if anchor.anchor_type == "past_event" and anchor.anchor_time:
+        events = await retrieval.retrieve_events_around_anchor(
+            session, line_id=req.line_id, anchor_time=anchor.anchor_time,
+        )
+    else:
+        events = await retrieval.retrieve_recent_events(session, req.line_id)
+
+    matched_history = []
+    if anchor.style_scope and anchor.failure_mode_scope:
+        matched_history = await retrieval.retrieve_failure_mode_matched(
+            session,
+            line_id=req.line_id,
+            style=anchor.style_scope,
+            failure_mode=anchor.failure_mode_scope,
+            before=anchor.anchor_time,
+        )
+
+    work_orders = await retrieval.retrieve_work_orders(
+        session,
+        line_id=req.line_id,
+        equipment_scope=anchor.equipment_scope or None,
+        before=anchor.anchor_time,
+    )
+
     memories = await retrieval.retrieve_memories(session, query_vec, req.line_id)
     rules = await evaluate_rules(session, req.live_context)
     if memories:
-        await retrieval.mark_memories_accessed(session, [m.memory_id for m in memories])
+        await retrieval.mark_memories_accessed(
+            session, [m.memory_id for m in memories]
+        )
     retrieval_ms = int((time.perf_counter() - t_retr) * 1000)
 
     # --- Assembly --------------------------------------------------------
@@ -235,6 +358,8 @@ async def handle_chat(session: AsyncSession, req: ChatRequest) -> ChatResponse:
         events=events,
         memories=memories,
         rules=rules,
+        matched_history=matched_history,
+        work_orders=work_orders,
         conversation_history=history,
         user_role=profile.get("role_primary"),
         response_detail_level=profile.get("response_detail_level", "standard"),
@@ -261,7 +386,14 @@ async def handle_chat(session: AsyncSession, req: ChatRequest) -> ChatResponse:
             content=response_text,
             sources=[],
             confidence="insufficient_evidence",
-            context_snapshot={"summary": assembled.summary, "short_circuit": True},
+            context_snapshot={
+                "summary": assembled.summary,
+                "short_circuit": True,
+                "parsed_anchor": anchor.model_dump(mode="json"),
+                "excluded_buckets": [
+                    eb.model_dump(mode="json") for eb in assembled.excluded_buckets
+                ],
+            },
             prompt_version=sys_prompt.version,
             model_name="(none - short-circuit)",
             latency_ms=total_ms,
@@ -274,7 +406,11 @@ async def handle_chat(session: AsyncSession, req: ChatRequest) -> ChatResponse:
             session_id=req.session_id,
             entity_type="message",
             entity_id=str(msg_id),
-            details={"short_circuit": "insufficient_evidence", "summary": assembled.summary},
+            details={
+                "short_circuit": "insufficient_evidence",
+                "summary": assembled.summary,
+                "anchor_type": anchor.anchor_type,
+            },
         )
         return ChatResponse(
             message_id=msg_id,
@@ -325,6 +461,18 @@ async def handle_chat(session: AsyncSession, req: ChatRequest) -> ChatResponse:
         context_snapshot={
             "live_context": req.live_context.model_dump(mode="json"),
             "summary": assembled.summary,
+            "parsed_anchor": anchor.model_dump(mode="json"),
+            "excluded_buckets": [
+                eb.model_dump(mode="json") for eb in assembled.excluded_buckets
+            ],
+            "matched_history_run_ids": [
+                str(m.run_id) for m in matched_history
+            ],
+            "work_order_ids": [str(w.wo_id) for w in work_orders],
+            "camera_clip_handles": [
+                c.storage_handle for c in req.live_context.attached_clips
+                if c.storage_handle
+            ],
             "all_citations_offered": [c.model_dump(mode="json") for c in assembled.citations],
         },
         prompt_version=sys_prompt.version,

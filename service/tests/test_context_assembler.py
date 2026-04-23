@@ -49,7 +49,8 @@ def test_evidence_present_when_tags_supplied():
     )
     assert not is_evidence_insufficient(out.summary)
     assert out.summary["key_tags"] == 1
-    assert any(c.type == "live_tag" for c in out.citations)
+    # v2 uppercase taxonomy
+    assert any(c.type == "LIVE_TAG" for c in out.citations)
 
 
 def test_section_delimiters_present():
@@ -59,9 +60,12 @@ def test_section_delimiters_present():
         chunks=[], events=[], memories=[], rules=[],
     )
     for header in (
-        "LIVE PLANT CONTEXT",
+        "PARSED ANCHOR",
+        "LIVE TAG VALUES",
+        "LIVE ALARMS",
         "RECENT EVENTS",
         "RETRIEVED DOCUMENTS",
+        "WORK ORDERS",
         "DETERMINISTIC RULES",
         "APPROVED LINE MEMORY",
         "ML PREDICTIONS",

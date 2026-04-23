@@ -64,27 +64,150 @@ class RecipeContext(BaseModel):
     product_style: str | None = None
     product_family: str | None = None
     recipe_id: str | None = None
+    front_step: int | None = None
     target_specs: dict[str, Any] = Field(default_factory=dict)
+
+
+# -----------------------------------------------------------------------------
+# Query anchor (design §3.1)
+# -----------------------------------------------------------------------------
+
+AnchorType = Literal["past_event", "current_state", "pattern"]
+AnchorStatus = Literal[
+    "resolved",
+    "needs_clarification_enumerated",
+    "needs_clarification_open",
+    "needs_clarification_scoped",
+]
+
+
+class ClarificationOption(BaseModel):
+    """One enumerated candidate the user may pick to disambiguate the anchor."""
+    label: str
+    anchor_event_id: str | None = None
+    anchor_run_id: str | None = None
+    anchor_time: datetime | None = None
+    note: str | None = None
+
+
+class QueryAnchor(BaseModel):
+    """
+    Structured parse of the user query that drives anchor-conditional
+    evidence-bucket assembly. See design §3.1–3.3.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    anchor_type: AnchorType
+    anchor_time: datetime | None = None
+    anchor_event_id: str | None = None
+    anchor_run_id: str | None = None
+    style_scope: str | None = None
+    failure_mode_scope: str | None = None
+    equipment_scope: list[str] = Field(default_factory=list)
+    anchor_status: AnchorStatus = "resolved"
+    clarification_prompt: str | None = None
+    clarification_options: list[ClarificationOption] = Field(default_factory=list)
+
+
+# -----------------------------------------------------------------------------
+# Anchor-conditional tag evidence (design §3.3, §3.5)
+# -----------------------------------------------------------------------------
+
+TagClass = Literal[
+    "setpoint_tracking", "oscillating_controlled",
+    "process_following", "discrete_state",
+]
+
+
+class BaselineWindow(BaseModel):
+    """
+    Per-tag aggregate over a named evidence bucket. The bucket name is
+    one of: pre_anchor_60m, pre_anchor_24h, normal_baseline_14d,
+    last_4_runs, failure_mode_matched.
+    """
+    bucket: Literal[
+        "pre_anchor_60m", "pre_anchor_24h", "normal_baseline_14d",
+        "last_4_runs", "failure_mode_matched",
+    ]
+    window_start: datetime | None = None
+    window_end: datetime | None = None
+    mean: float | None = None
+    min: float | None = None
+    max: float | None = None
+    std: float | None = None
+    samples: list[float] = Field(default_factory=list)
+    note: str | None = None
+
+
+class TagBucketEvidence(BaseModel):
+    """Full per-tag evidence rendering for a single anchor query."""
+    name: str
+    tag_class: TagClass
+    target: float | None = None
+    current: float | None = None
+    baselines: list[BaselineWindow] = Field(default_factory=list)
+
+
+class MatchedHistoryRun(BaseModel):
+    """A prior run that matches (style, failure_mode) for the anchor."""
+    run_id: UUID | None = None
+    run_number: str | None = None
+    failure_mode: str | None = None
+    event_time: datetime | None = None
+    pre_event_summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class CameraClipRef(BaseModel):
+    """Symphony clip handle attached to an event in scope."""
+    clip_id: UUID | None = None
+    event_id: UUID | None = None
+    event_type: str | None = None
+    camera_id: str
+    camera_location: str | None = None
+    storage_handle: str | None = None
+    clip_start: datetime | None = None
+    clip_end: datetime | None = None
+    extraction_status: str | None = None
+
+
+class BucketExclusion(BaseModel):
+    """Records a bucket that was deliberately not populated, with reason."""
+    bucket: str
+    reason: str  # e.g. "anchor_type=past_event excludes live state"
 
 
 class CuratedContextPackage(BaseModel):
     """
-    The structured, pre-digested plant context Ignition sends to the service.
+    The structured, pre-digested plant context delivered into prompt assembly.
 
-    THIS IS A CONTRACT: Ignition MUST NOT send raw historian dumps. It MUST
-    pre-aggregate and curate. The service MUST NOT accept arbitrary blobs
-    here. Adding fields requires updating both sides.
+    THIS IS A CONTRACT: raw historian dumps never reach the LLM. Adding
+    fields requires updating Ignition gateway-side code in lockstep.
+
+    v1 fields (key_tags / tag_summaries / deviations / active_alarms /
+    recipe) are retained so the existing Ignition gateway client keeps
+    validating. v2 adds the parsed anchor, the five anchor-conditional
+    evidence buckets per §3.3, attached camera clips, and explicit
+    bucket-exclusion records.
     """
     model_config = ConfigDict(extra="forbid")
 
     snapshot_time: datetime
     line_id: str
+
+    # ---- v1 flat snapshot (kept for backward compatibility) -------------
     key_tags: list[TagValue] = Field(default_factory=list)
     tag_summaries: list[TagSummaryStat] = Field(default_factory=list)
     deviations: list[TagDeviation] = Field(default_factory=list)
     active_alarms: list[ActiveAlarm] = Field(default_factory=list)
     recipe: RecipeContext | None = None
     historian_window_minutes: int = 60
+
+    # ---- v2 anchor + buckets (server-populated when present) ------------
+    anchor: QueryAnchor | None = None
+    tag_evidence: list[TagBucketEvidence] = Field(default_factory=list)
+    matched_history: list[MatchedHistoryRun] = Field(default_factory=list)
+    attached_clips: list[CameraClipRef] = Field(default_factory=list)
+    excluded_buckets: list[BucketExclusion] = Field(default_factory=list)
 
 
 # -----------------------------------------------------------------------------
@@ -106,9 +229,14 @@ class SourceCitation(BaseModel):
     """A single source cited in an assistant response."""
     id: str  # display id like "1", "2"
     type: Literal[
+        # v1 names (kept as aliases for one release; v2 prefers the names below)
         "live_tag", "tag_summary", "tag_deviation", "active_alarm",
         "document_chunk", "downtime_event", "quality_result", "defect_event",
-        "business_rule", "line_memory", "ml_prediction"
+        "business_rule", "line_memory", "ml_prediction",
+        # v2 provenance taxonomy (design §3.6)
+        "LIVE_TAG", "HISTORIAN_STAT", "DEVIATION", "BASELINE_COMPARE",
+        "MATCHED_HISTORY", "ALARM", "EVENT", "WORK_ORDER",
+        "DOCUMENT", "CAMERA_CLIP", "RULE", "MEMORY", "ML_PREDICTION",
     ]
     title: str
     excerpt: str | None = None

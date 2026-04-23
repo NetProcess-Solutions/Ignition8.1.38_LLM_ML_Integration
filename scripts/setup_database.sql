@@ -1,333 +1,332 @@
 -- =============================================================================
--- IgnitionChatbot - Full schema
--- Creates all tables across 8 schema groups in one migration.
--- See docs/data_model.md for narrative.
+-- IgnitionChatbot v2.0 schema
+-- All 29 tables across 9 schema groups, created upfront per design §4.1.
+-- Idempotent: safe to re-run; uses IF NOT EXISTS / DROP IF EXISTS guards.
 -- =============================================================================
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- =============================================================================
--- GROUP 1: DOCUMENT CORPUS
+-- Schema Group 1: Document Corpus
 -- =============================================================================
 
-CREATE TABLE documents (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    source_type     VARCHAR(50)  NOT NULL,
-    source_id       VARCHAR(255),
-    line_id         VARCHAR(50)  NOT NULL,
-    title           VARCHAR(500),
-    author          VARCHAR(255),
-    document_date   TIMESTAMPTZ,
-    shift           VARCHAR(20),
-    raw_text        TEXT,
-    structured_fields JSONB DEFAULT '{}'::jsonb,
-    metadata        JSONB DEFAULT '{}'::jsonb,
-    ingestion_batch_id UUID,
-    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT documents_source_type_chk
-      CHECK (source_type IN ('maintenance_report','downtime_report','quality_report',
-                             'sop','procedure','note','defect_report','other'))
+CREATE TABLE IF NOT EXISTS documents (
+    id                       UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_type              VARCHAR(50)  NOT NULL,
+    source_id                VARCHAR(255),
+    line_id                  VARCHAR(50)  NOT NULL,
+    title                    VARCHAR(500),
+    author                   VARCHAR(255),
+    document_date            TIMESTAMPTZ,
+    shift                    VARCHAR(20),
+    document_role            VARCHAR(50),
+    document_weight          NUMERIC(3,2) NOT NULL DEFAULT 1.0,
+    applicable_positions     TEXT[]       NOT NULL DEFAULT '{}',
+    applicable_equipment     TEXT[]       NOT NULL DEFAULT '{}',
+    applicable_failure_modes TEXT[]       NOT NULL DEFAULT '{}',
+    raw_text                 TEXT,
+    structured_fields        JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    metadata                 JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    ingestion_batch_id       UUID,
+    is_active                BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at               TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at               TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_documents_line_date     ON documents (line_id, document_date DESC);
-CREATE INDEX idx_documents_source_type   ON documents (source_type);
-CREATE INDEX idx_documents_active        ON documents (is_active) WHERE is_active = TRUE;
-CREATE INDEX idx_documents_metadata_gin  ON documents USING gin (metadata);
+CREATE INDEX IF NOT EXISTS idx_documents_line_active   ON documents (line_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_documents_source_type   ON documents (source_type);
+CREATE INDEX IF NOT EXISTS idx_documents_document_date ON documents (document_date DESC);
+CREATE INDEX IF NOT EXISTS idx_documents_role          ON documents (document_role);
 
-CREATE TABLE document_chunks (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    document_id     UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    chunk_index     INTEGER NOT NULL,
-    chunk_text      TEXT NOT NULL,
-    embedding       VECTOR(384),
-    token_count     INTEGER,
-    metadata        JSONB DEFAULT '{}'::jsonb,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+CREATE TABLE IF NOT EXISTS document_chunks (
+    id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    document_id  UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    chunk_index  INTEGER     NOT NULL,
+    chunk_text   TEXT        NOT NULL,
+    embedding    VECTOR(384),
+    token_count  INTEGER,
+    metadata     JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (document_id, chunk_index)
 );
-CREATE INDEX idx_chunks_document   ON document_chunks (document_id);
-CREATE INDEX idx_chunks_embedding  ON document_chunks
-    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
-CREATE INDEX idx_chunks_text_trgm  ON document_chunks USING gin (chunk_text gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON document_chunks (document_id);
+CREATE INDEX IF NOT EXISTS idx_chunks_embedding
+    ON document_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+CREATE INDEX IF NOT EXISTS idx_chunks_text_trgm
+    ON document_chunks USING gin (chunk_text gin_trgm_ops);
 
-CREATE TABLE ingestion_runs (
-    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    source_type         VARCHAR(50) NOT NULL,
-    started_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    completed_at        TIMESTAMPTZ,
-    documents_processed INTEGER DEFAULT 0,
-    chunks_created      INTEGER DEFAULT 0,
-    errors              JSONB DEFAULT '[]'::jsonb,
-    triggered_by        VARCHAR(255),
-    notes               TEXT
+CREATE TABLE IF NOT EXISTS ingestion_runs (
+    id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_type           VARCHAR(50) NOT NULL,
+    started_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at          TIMESTAMPTZ,
+    documents_processed   INTEGER     NOT NULL DEFAULT 0,
+    chunks_created        INTEGER     NOT NULL DEFAULT 0,
+    errors                JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    triggered_by          VARCHAR(255)
 );
 
 -- =============================================================================
--- GROUP 2: EVENTS & OUTCOMES
+-- Schema Group 2: Events & Outcomes
 -- =============================================================================
 
-CREATE TABLE production_runs (
+CREATE TABLE IF NOT EXISTS production_runs (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    line_id         VARCHAR(50) NOT NULL,
+    line_id         VARCHAR(50)  NOT NULL,
     run_number      VARCHAR(100),
     recipe_id       VARCHAR(100),
     product_style   VARCHAR(100),
     product_family  VARCHAR(100),
-    start_time      TIMESTAMPTZ NOT NULL,
+    front_step      INTEGER,
+    start_time      TIMESTAMPTZ  NOT NULL,
     end_time        TIMESTAMPTZ,
-    status          VARCHAR(20) NOT NULL DEFAULT 'running',
-    target_specs    JSONB DEFAULT '{}'::jsonb,
-    metadata        JSONB DEFAULT '{}'::jsonb,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT production_runs_status_chk
-      CHECK (status IN ('running','completed','aborted'))
+    status          VARCHAR(20)  NOT NULL DEFAULT 'running',
+    target_specs    JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    metadata        JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (line_id, run_number)
 );
-CREATE INDEX idx_runs_line_time   ON production_runs (line_id, start_time DESC);
-CREATE INDEX idx_runs_product     ON production_runs (product_family, product_style);
+CREATE INDEX IF NOT EXISTS idx_runs_line_start  ON production_runs (line_id, start_time DESC);
+CREATE INDEX IF NOT EXISTS idx_runs_style_step  ON production_runs (product_style, front_step);
+CREATE INDEX IF NOT EXISTS idx_runs_status      ON production_runs (status);
 
-CREATE TABLE downtime_events (
-    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    line_id             VARCHAR(50) NOT NULL,
-    run_id              UUID REFERENCES production_runs(id) ON DELETE SET NULL,
-    start_time          TIMESTAMPTZ NOT NULL,
-    end_time            TIMESTAMPTZ,
-    duration_minutes    NUMERIC GENERATED ALWAYS AS
-        (EXTRACT(EPOCH FROM (end_time - start_time)) / 60.0) STORED,
-    category            VARCHAR(50),
-    subcategory         VARCHAR(100),
-    equipment_id        VARCHAR(100),
-    description         TEXT,
-    root_cause          TEXT,
-    root_cause_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
-    shift               VARCHAR(20),
-    reported_by         VARCHAR(255),
-    metadata            JSONB DEFAULT '{}'::jsonb,
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS downtime_events (
+    id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    line_id               VARCHAR(50) NOT NULL,
+    run_id                UUID REFERENCES production_runs(id) ON DELETE SET NULL,
+    start_time            TIMESTAMPTZ NOT NULL,
+    end_time              TIMESTAMPTZ,
+    duration_minutes      NUMERIC GENERATED ALWAYS AS
+                              (EXTRACT(EPOCH FROM (end_time - start_time)) / 60.0) STORED,
+    category              VARCHAR(50),
+    subcategory           VARCHAR(100),
+    equipment_id          VARCHAR(100),
+    description           TEXT,
+    root_cause            TEXT,
+    root_cause_confirmed  BOOLEAN     NOT NULL DEFAULT FALSE,
+    shift                 VARCHAR(20),
+    reported_by           VARCHAR(255),
+    metadata              JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_downtime_line_time  ON downtime_events (line_id, start_time DESC);
-CREATE INDEX idx_downtime_category   ON downtime_events (category);
-CREATE INDEX idx_downtime_equipment  ON downtime_events (equipment_id);
+CREATE INDEX IF NOT EXISTS idx_downtime_line_time ON downtime_events (line_id, start_time DESC);
+CREATE INDEX IF NOT EXISTS idx_downtime_run       ON downtime_events (run_id);
+CREATE INDEX IF NOT EXISTS idx_downtime_equipment ON downtime_events (equipment_id);
 
-CREATE TABLE quality_results (
+CREATE TABLE IF NOT EXISTS quality_results (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     line_id         VARCHAR(50) NOT NULL,
     run_id          UUID REFERENCES production_runs(id) ON DELETE SET NULL,
     test_type       VARCHAR(50) NOT NULL,
     test_time       TIMESTAMPTZ NOT NULL,
     sample_id       VARCHAR(100),
-    result          VARCHAR(20) NOT NULL,
-    measurements    JSONB DEFAULT '{}'::jsonb,
-    specification   JSONB DEFAULT '{}'::jsonb,
+    result          VARCHAR(20),
+    measurements    JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    specification   JSONB       NOT NULL DEFAULT '{}'::jsonb,
     notes           TEXT,
     tested_by       VARCHAR(255),
-    metadata        JSONB DEFAULT '{}'::jsonb,
+    metadata        JSONB       NOT NULL DEFAULT '{}'::jsonb,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT quality_results_result_chk
-      CHECK (result IN ('pass','fail','marginal','retest'))
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_quality_line_time  ON quality_results (line_id, test_time DESC);
-CREATE INDEX idx_quality_run        ON quality_results (run_id);
-CREATE INDEX idx_quality_type_res   ON quality_results (test_type, result);
+CREATE INDEX IF NOT EXISTS idx_quality_line_time   ON quality_results (line_id, test_time DESC);
+CREATE INDEX IF NOT EXISTS idx_quality_run         ON quality_results (run_id);
+CREATE INDEX IF NOT EXISTS idx_quality_sample      ON quality_results (sample_id);
+CREATE INDEX IF NOT EXISTS idx_quality_test_type   ON quality_results (test_type);
 
-CREATE TABLE defect_events (
-    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    line_id             VARCHAR(50) NOT NULL,
-    run_id              UUID REFERENCES production_runs(id) ON DELETE SET NULL,
-    defect_type         VARCHAR(50) NOT NULL,
-    detected_time       TIMESTAMPTZ NOT NULL,
-    detection_method    VARCHAR(50),
-    severity            VARCHAR(20),
-    quantity_affected   NUMERIC,
-    description         TEXT,
-    root_cause          TEXT,
-    root_cause_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
-    corrective_action   TEXT,
-    status              VARCHAR(20) NOT NULL DEFAULT 'open',
-    resolved_by         VARCHAR(255),
-    resolved_at         TIMESTAMPTZ,
-    metadata            JSONB DEFAULT '{}'::jsonb,
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT defect_events_status_chk
-      CHECK (status IN ('open','investigating','resolved','unresolved','closed')),
-    CONSTRAINT defect_events_severity_chk
-      CHECK (severity IS NULL OR severity IN ('minor','major','critical'))
+-- failure_mode is a closed enum maintained in failure_modes (Group 9 / seed
+-- reference data). We enforce referential integrity via FK so the enum stays
+-- closed; adding a new mode requires inserting into failure_modes first.
+CREATE TABLE IF NOT EXISTS failure_modes (
+    code         VARCHAR(80) PRIMARY KEY,
+    label        VARCHAR(255) NOT NULL,
+    defect_type  VARCHAR(50)  NOT NULL,
+    description  TEXT,
+    is_active    BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_defects_line_time  ON defect_events (line_id, detected_time DESC);
-CREATE INDEX idx_defects_type       ON defect_events (defect_type);
-CREATE INDEX idx_defects_status     ON defect_events (status);
+
+CREATE TABLE IF NOT EXISTS defect_events (
+    id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    line_id               VARCHAR(50) NOT NULL,
+    run_id                UUID REFERENCES production_runs(id) ON DELETE SET NULL,
+    defect_type           VARCHAR(50) NOT NULL,
+    failure_mode          VARCHAR(80) REFERENCES failure_modes(code) ON DELETE RESTRICT,
+    detected_time         TIMESTAMPTZ NOT NULL,
+    detection_method      VARCHAR(50),
+    severity              VARCHAR(20),
+    quantity_affected     NUMERIC,
+    description           TEXT,
+    root_cause            TEXT,
+    root_cause_confirmed  BOOLEAN     NOT NULL DEFAULT FALSE,
+    corrective_action     TEXT,
+    status                VARCHAR(20) NOT NULL DEFAULT 'open',
+    resolved_by           VARCHAR(255),
+    resolved_at           TIMESTAMPTZ,
+    metadata              JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_defect_line_time     ON defect_events (line_id, detected_time DESC);
+CREATE INDEX IF NOT EXISTS idx_defect_run           ON defect_events (run_id);
+CREATE INDEX IF NOT EXISTS idx_defect_failure_mode  ON defect_events (failure_mode);
+CREATE INDEX IF NOT EXISTS idx_defect_status        ON defect_events (status);
+
+CREATE TABLE IF NOT EXISTS work_orders (
+    id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    wo_number            VARCHAR(100) NOT NULL,
+    line_id              VARCHAR(50)  NOT NULL,
+    run_id               UUID REFERENCES production_runs(id) ON DELETE SET NULL,
+    equipment_id         VARCHAR(100),
+    wo_type              VARCHAR(40),
+    priority             VARCHAR(20),
+    status               VARCHAR(20),
+    requested_by         VARCHAR(255),
+    assigned_to          VARCHAR(255),
+    date_opened          TIMESTAMPTZ NOT NULL,
+    date_closed          TIMESTAMPTZ,
+    labor_hours          NUMERIC,
+    parts_used           JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    problem_description  TEXT,
+    resolution_notes     TEXT,
+    source_wo_id         VARCHAR(255),
+    last_synced_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    metadata             JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (wo_number)
+);
+CREATE INDEX IF NOT EXISTS idx_wo_line_opened  ON work_orders (line_id, date_opened DESC);
+CREATE INDEX IF NOT EXISTS idx_wo_equipment    ON work_orders (equipment_id);
+CREATE INDEX IF NOT EXISTS idx_wo_status       ON work_orders (status);
+CREATE INDEX IF NOT EXISTS idx_wo_run          ON work_orders (run_id);
+
+CREATE TABLE IF NOT EXISTS event_clips (
+    id                 UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    event_id           UUID         NOT NULL,
+    event_type         VARCHAR(50)  NOT NULL,
+    camera_id          VARCHAR(100) NOT NULL,
+    camera_location    VARCHAR(100),
+    clip_start         TIMESTAMPTZ  NOT NULL,
+    clip_end           TIMESTAMPTZ  NOT NULL,
+    storage_handle     VARCHAR(500),
+    extraction_status  VARCHAR(20)  NOT NULL DEFAULT 'pending',
+    failure_reason     TEXT,
+    purged_at          TIMESTAMPTZ,
+    captured_via       VARCHAR(50),
+    created_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_clips_event       ON event_clips (event_type, event_id);
+CREATE INDEX IF NOT EXISTS idx_clips_camera_time ON event_clips (camera_id, clip_start DESC);
+CREATE INDEX IF NOT EXISTS idx_clips_status      ON event_clips (extraction_status);
 
 -- =============================================================================
--- GROUP 5: USER PROFILES & PERMISSIONS  (created before conversations FK)
+-- Schema Group 3: Conversations, Messages, Feedback-Learning
 -- =============================================================================
 
-CREATE TABLE user_profiles (
+CREATE TABLE IF NOT EXISTS user_profiles (
     id                              VARCHAR(255) PRIMARY KEY,
     display_name                    VARCHAR(255),
-    role_primary                    VARCHAR(50),
-    roles_additional                TEXT[] DEFAULT '{}',
+    role_primary                    VARCHAR(50)  NOT NULL DEFAULT 'operator',
+    roles_additional                TEXT[]       NOT NULL DEFAULT '{}',
     department                      VARCHAR(100),
     shift_default                   VARCHAR(20),
-    lines_primary                   TEXT[] DEFAULT '{}',
-    equipment_focus                 TEXT[] DEFAULT '{}',
-    response_detail_level           VARCHAR(20) NOT NULL DEFAULT 'standard',
-    response_style                  VARCHAR(20) NOT NULL DEFAULT 'balanced',
-    include_tag_values              BOOLEAN NOT NULL DEFAULT TRUE,
-    include_ml_details              BOOLEAN NOT NULL DEFAULT FALSE,
-    include_source_excerpts         BOOLEAN NOT NULL DEFAULT TRUE,
-    default_historian_window_minutes INTEGER NOT NULL DEFAULT 60,
-    auto_include_alarms             BOOLEAN NOT NULL DEFAULT TRUE,
-    preferred_units                 VARCHAR(20) NOT NULL DEFAULT 'imperial',
-    created_at                      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at                      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_active_at                  TIMESTAMPTZ,
-    CONSTRAINT user_profiles_role_chk
-      CHECK (role_primary IS NULL OR role_primary IN
-        ('operator','engineer','maintenance','quality','supervisor','manager','admin')),
-    CONSTRAINT user_profiles_detail_chk
-      CHECK (response_detail_level IN ('brief','standard','detailed','technical')),
-    CONSTRAINT user_profiles_style_chk
-      CHECK (response_style IN ('direct','balanced','explanatory'))
+    lines_primary                   TEXT[]       NOT NULL DEFAULT '{}',
+    equipment_focus                 TEXT[]       NOT NULL DEFAULT '{}',
+    response_detail_level           VARCHAR(20)  NOT NULL DEFAULT 'standard',
+    response_style                  VARCHAR(20)  NOT NULL DEFAULT 'balanced',
+    include_tag_values              BOOLEAN      NOT NULL DEFAULT TRUE,
+    include_ml_details              BOOLEAN      NOT NULL DEFAULT FALSE,
+    include_source_excerpts         BOOLEAN      NOT NULL DEFAULT TRUE,
+    default_historian_window_minutes INTEGER     NOT NULL DEFAULT 60,
+    auto_include_alarms             BOOLEAN      NOT NULL DEFAULT TRUE,
+    preferred_units                 VARCHAR(20)  NOT NULL DEFAULT 'imperial',
+    created_at                      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at                      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    last_active_at                  TIMESTAMPTZ
 );
 
-CREATE TABLE user_permissions (
+CREATE TABLE IF NOT EXISTS user_permissions (
     id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    role        VARCHAR(50) NOT NULL,
+    role        VARCHAR(50)  NOT NULL,
     permission  VARCHAR(100) NOT NULL,
-    granted     BOOLEAN NOT NULL DEFAULT TRUE,
+    granted     BOOLEAN      NOT NULL DEFAULT FALSE,
     UNIQUE (role, permission)
 );
 
--- =============================================================================
--- GROUP 3: CONVERSATIONS, MESSAGES & FEEDBACK-LEARNING LAYER
--- =============================================================================
-
-CREATE TABLE conversations (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    session_id      VARCHAR(255),
-    user_id         VARCHAR(255) REFERENCES user_profiles(id) ON DELETE SET NULL,
-    line_id         VARCHAR(50) NOT NULL,
-    started_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    ended_at        TIMESTAMPTZ,
-    message_count   INTEGER NOT NULL DEFAULT 0,
-    metadata        JSONB DEFAULT '{}'::jsonb
+CREATE TABLE IF NOT EXISTS conversations (
+    id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id     VARCHAR(255) NOT NULL,
+    user_id        VARCHAR(255) REFERENCES user_profiles(id) ON DELETE SET NULL,
+    line_id        VARCHAR(50)  NOT NULL,
+    started_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    ended_at       TIMESTAMPTZ,
+    message_count  INTEGER      NOT NULL DEFAULT 0,
+    metadata       JSONB        NOT NULL DEFAULT '{}'::jsonb
 );
-CREATE INDEX idx_conv_user_time     ON conversations (user_id, started_at DESC);
-CREATE INDEX idx_conv_session       ON conversations (session_id);
+CREATE INDEX IF NOT EXISTS idx_conv_session ON conversations (session_id);
+CREATE INDEX IF NOT EXISTS idx_conv_user    ON conversations (user_id, started_at DESC);
 
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
+    id                 UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    conversation_id    UUID         NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    role               VARCHAR(20)  NOT NULL,
+    content            TEXT         NOT NULL,
+    sources            JSONB        NOT NULL DEFAULT '[]'::jsonb,
+    confidence         VARCHAR(20),
+    -- The full audit record. Per design §3.10 it includes the parsed anchor,
+    -- which buckets were populated AND which were explicitly excluded with
+    -- reason, retrieval scores, rules matched, memory ids, clip handles,
+    -- and prompt+model pinning.
+    context_snapshot   JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    prompt_version     VARCHAR(50),
+    model_name         VARCHAR(100),
+    model_params       JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    token_usage        JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    retrieval_scores   JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    rules_matched      JSONB        NOT NULL DEFAULT '[]'::jsonb,
+    memories_used      JSONB        NOT NULL DEFAULT '[]'::jsonb,
+    latency_ms         INTEGER,
+    latency_breakdown  JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    created_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_messages_conv    ON messages (conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_messages_role    ON messages (role);
+CREATE INDEX IF NOT EXISTS idx_messages_created ON messages (created_at DESC);
+
+CREATE TABLE IF NOT EXISTS message_feedback (
+    id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    message_id   UUID         NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    user_id      VARCHAR(255) REFERENCES user_profiles(id) ON DELETE SET NULL,
+    signal_type  VARCHAR(50)  NOT NULL,
+    signal_value VARCHAR(20)  NOT NULL,
+    comment      TEXT,
+    created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_message     ON message_feedback (message_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_signal      ON message_feedback (signal_type, signal_value);
+
+-- Memory candidates is referenced by user_corrections.created_memory_id later.
+-- Forward-declare line_memory and memory_candidates with minimal CREATE then
+-- add FKs after both exist. (Postgres allows late-bound FKs only via ALTER.)
+CREATE TABLE IF NOT EXISTS line_memory (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    conversation_id     UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-    role                VARCHAR(20) NOT NULL,
-    content             TEXT NOT NULL,
-    sources             JSONB DEFAULT '[]'::jsonb,
-    confidence          VARCHAR(30),
-    context_snapshot    JSONB DEFAULT '{}'::jsonb,
-    prompt_version      VARCHAR(50),
-    model_name          VARCHAR(100),
-    model_params        JSONB DEFAULT '{}'::jsonb,
-    token_usage         JSONB DEFAULT '{}'::jsonb,
-    retrieval_scores    JSONB DEFAULT '[]'::jsonb,
-    rules_matched       JSONB DEFAULT '[]'::jsonb,
-    memories_used       JSONB DEFAULT '[]'::jsonb,
-    latency_ms          INTEGER,
-    latency_breakdown   JSONB DEFAULT '{}'::jsonb,
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT messages_role_chk
-      CHECK (role IN ('user','assistant','system')),
-    CONSTRAINT messages_confidence_chk
-      CHECK (confidence IS NULL OR confidence IN
-        ('confirmed','likely','hypothesis','insufficient_evidence'))
-);
-CREATE INDEX idx_messages_conv_time ON messages (conversation_id, created_at);
-
-CREATE TABLE message_feedback (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    message_id      UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-    user_id         VARCHAR(255) REFERENCES user_profiles(id) ON DELETE SET NULL,
-    signal_type     VARCHAR(50) NOT NULL,
-    signal_value    VARCHAR(20) NOT NULL,
-    comment         TEXT,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT message_feedback_signal_type_chk
-      CHECK (signal_type IN (
-        'usefulness','correctness','completeness','source_relevance',
-        'root_cause_confirmed','root_cause_rejected',
-        'recommendation_acted_on','recommendation_ignored',
-        'recommendation_helped','recommendation_did_not_help')),
-    CONSTRAINT message_feedback_signal_value_chk
-      CHECK (signal_value IN ('positive','negative','neutral'))
-);
-CREATE INDEX idx_feedback_message ON message_feedback (message_id);
-CREATE INDEX idx_feedback_user    ON message_feedback (user_id, created_at DESC);
-CREATE INDEX idx_feedback_signal  ON message_feedback (signal_type, signal_value);
-
-CREATE TABLE user_corrections (
-    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    message_id          UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-    user_id             VARCHAR(255) REFERENCES user_profiles(id) ON DELETE SET NULL,
-    correction_type     VARCHAR(50) NOT NULL,
-    original_claim      TEXT,
-    corrected_claim     TEXT NOT NULL,
-    supporting_evidence TEXT,
-    status              VARCHAR(20) NOT NULL DEFAULT 'submitted',
-    reviewed_by         VARCHAR(255),
-    review_date         TIMESTAMPTZ,
-    review_notes        TEXT,
-    created_memory_id   UUID,                 -- FK added after line_memory exists
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT corrections_type_chk
-      CHECK (correction_type IN
-        ('factual_error','wrong_root_cause','missing_context',
-         'wrong_equipment','outdated_info','misleading_conclusion','other')),
-    CONSTRAINT corrections_status_chk
-      CHECK (status IN ('submitted','reviewed','accepted','rejected'))
-);
-CREATE INDEX idx_corrections_message ON user_corrections (message_id);
-CREATE INDEX idx_corrections_status  ON user_corrections (status);
-
-CREATE TABLE outcome_linkages (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    message_id      UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-    outcome_type    VARCHAR(50) NOT NULL,
-    outcome_id      UUID NOT NULL,
-    outcome_table   VARCHAR(50) NOT NULL,
-    alignment       VARCHAR(20) NOT NULL,
-    linked_by       VARCHAR(255),
-    notes           TEXT,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT outcome_linkages_table_chk
-      CHECK (outcome_table IN ('quality_results','defect_events','downtime_events')),
-    CONSTRAINT outcome_linkages_alignment_chk
-      CHECK (alignment IN ('confirmed','contradicted','partial','unrelated'))
-);
-CREATE INDEX idx_outcome_message ON outcome_linkages (message_id);
-CREATE INDEX idx_outcome_target  ON outcome_linkages (outcome_table, outcome_id);
-
--- =============================================================================
--- GROUP 4: DURABLE LINE MEMORY  (and memory_candidates staging)
--- =============================================================================
-
-CREATE TABLE line_memory (
-    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    line_id             VARCHAR(50) NOT NULL,
-    category            VARCHAR(50) NOT NULL,
-    content             TEXT NOT NULL,
+    line_id             VARCHAR(50)  NOT NULL,
+    category            VARCHAR(50)  NOT NULL,
+    content             TEXT         NOT NULL,
     source              VARCHAR(255),
-    confidence          VARCHAR(20) NOT NULL DEFAULT 'low',
-    status              VARCHAR(20) NOT NULL DEFAULT 'draft',
+    confidence          VARCHAR(20)  NOT NULL DEFAULT 'medium',
+    status              VARCHAR(20)  NOT NULL DEFAULT 'draft',
     embedding           VECTOR(384),
-    tags                TEXT[] DEFAULT '{}',
-    equipment_ids       TEXT[] DEFAULT '{}',
-    applies_to_products TEXT[] DEFAULT '{}',
+    tags                TEXT[]       NOT NULL DEFAULT '{}',
+    equipment_ids       TEXT[]       NOT NULL DEFAULT '{}',
+    applies_to_products TEXT[]       NOT NULL DEFAULT '{}',
     created_by          VARCHAR(255),
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     reviewed_by         VARCHAR(255),
     review_date         TIMESTAMPTZ,
     approved_by         VARCHAR(255),
@@ -335,196 +334,249 @@ CREATE TABLE line_memory (
     deprecated_at       TIMESTAMPTZ,
     deprecated_reason   TEXT,
     deprecated_by       VARCHAR(255),
-    challenge_count     INTEGER NOT NULL DEFAULT 0,
+    challenge_count     INTEGER      NOT NULL DEFAULT 0,
     last_challenged_at  TIMESTAMPTZ,
-    access_count        INTEGER NOT NULL DEFAULT 0,
+    access_count        INTEGER      NOT NULL DEFAULT 0,
     last_accessed       TIMESTAMPTZ,
-    superseded_by       UUID REFERENCES line_memory(id) ON DELETE SET NULL,
-    CONSTRAINT line_memory_category_chk
-      CHECK (category IN
-        ('equipment_fact','process_fact','failure_pattern',
-         'troubleshooting_heuristic','unresolved_investigation',
-         'user_correction','operating_tip')),
-    CONSTRAINT line_memory_confidence_chk
-      CHECK (confidence IN ('low','medium','high')),
-    CONSTRAINT line_memory_status_chk
-      CHECK (status IN ('draft','reviewed','approved','deprecated','challenged'))
+    superseded_by       UUID
 );
-CREATE INDEX idx_memory_line_status   ON line_memory (line_id, status);
-CREATE INDEX idx_memory_embedding     ON line_memory
-    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
-CREATE INDEX idx_memory_tags          ON line_memory USING gin (tags);
-CREATE INDEX idx_memory_equipment     ON line_memory USING gin (equipment_ids);
+CREATE INDEX IF NOT EXISTS idx_memory_status_line ON line_memory (status, line_id);
+CREATE INDEX IF NOT EXISTS idx_memory_category    ON line_memory (category);
+CREATE INDEX IF NOT EXISTS idx_memory_embedding
+    ON line_memory USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
+CREATE INDEX IF NOT EXISTS idx_memory_tags        ON line_memory USING gin (tags);
+DO $$ BEGIN
+    ALTER TABLE line_memory
+        ADD CONSTRAINT fk_memory_superseded_by
+        FOREIGN KEY (superseded_by) REFERENCES line_memory(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-ALTER TABLE user_corrections
-    ADD CONSTRAINT user_corrections_memory_fk
-    FOREIGN KEY (created_memory_id) REFERENCES line_memory(id) ON DELETE SET NULL;
-
-CREATE TABLE memory_candidates (
-    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    source_type         VARCHAR(50) NOT NULL,
-    source_message_ids  UUID[] DEFAULT '{}',
-    source_feedback_ids UUID[] DEFAULT '{}',
-    source_correction_id UUID REFERENCES user_corrections(id) ON DELETE SET NULL,
-    source_outcome_ids  UUID[] DEFAULT '{}',
-    proposed_content    TEXT NOT NULL,
-    proposed_category   VARCHAR(50) NOT NULL,
-    confidence_score    NUMERIC(3,2) NOT NULL DEFAULT 0.00,
-    status              VARCHAR(20) NOT NULL DEFAULT 'proposed',
-    promoted_memory_id  UUID REFERENCES line_memory(id) ON DELETE SET NULL,
-    reviewed_by         VARCHAR(255),
-    review_date         TIMESTAMPTZ,
-    review_notes        TEXT,
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT memory_candidates_source_type_chk
-      CHECK (source_type IN
-        ('repeated_pattern','confirmed_correction',
-         'confirmed_outcome','engineer_nominated')),
-    CONSTRAINT memory_candidates_status_chk
-      CHECK (status IN ('proposed','under_review','promoted','rejected'))
+CREATE TABLE IF NOT EXISTS user_corrections (
+    id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    message_id           UUID         NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    user_id              VARCHAR(255) REFERENCES user_profiles(id) ON DELETE SET NULL,
+    correction_type      VARCHAR(50)  NOT NULL,
+    original_claim       TEXT,
+    corrected_claim      TEXT         NOT NULL,
+    supporting_evidence  TEXT,
+    status               VARCHAR(20)  NOT NULL DEFAULT 'submitted',
+    reviewed_by          VARCHAR(255),
+    review_date          TIMESTAMPTZ,
+    review_notes         TEXT,
+    created_memory_id    UUID REFERENCES line_memory(id) ON DELETE SET NULL,
+    created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_candidates_status ON memory_candidates (status);
+CREATE INDEX IF NOT EXISTS idx_corrections_message ON user_corrections (message_id);
+CREATE INDEX IF NOT EXISTS idx_corrections_status  ON user_corrections (status);
+
+CREATE TABLE IF NOT EXISTS outcome_linkages (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    message_id    UUID         NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    outcome_type  VARCHAR(50)  NOT NULL,
+    outcome_id    UUID         NOT NULL,
+    outcome_table VARCHAR(50)  NOT NULL,
+    alignment     VARCHAR(20)  NOT NULL,
+    linked_by     VARCHAR(255),
+    notes         TEXT,
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_outcomes_message ON outcome_linkages (message_id);
+CREATE INDEX IF NOT EXISTS idx_outcomes_outcome ON outcome_linkages (outcome_table, outcome_id);
+
+CREATE TABLE IF NOT EXISTS memory_candidates (
+    id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_type           VARCHAR(50)  NOT NULL,
+    source_message_ids    UUID[]       NOT NULL DEFAULT '{}',
+    source_feedback_ids   UUID[]       NOT NULL DEFAULT '{}',
+    source_correction_id  UUID REFERENCES user_corrections(id) ON DELETE SET NULL,
+    source_outcome_ids    UUID[]       NOT NULL DEFAULT '{}',
+    proposed_content      TEXT         NOT NULL,
+    proposed_category     VARCHAR(50),
+    confidence_score      NUMERIC(3,2) NOT NULL DEFAULT 0.0,
+    status                VARCHAR(20)  NOT NULL DEFAULT 'proposed',
+    promoted_memory_id    UUID REFERENCES line_memory(id) ON DELETE SET NULL,
+    reviewed_by           VARCHAR(255),
+    review_date           TIMESTAMPTZ,
+    review_notes          TEXT,
+    created_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_candidates_status ON memory_candidates (status, confidence_score DESC);
+
+-- chunk_quality_signals is the v1 retrieval-feedback table; design §5.5 Flow 1
+-- explicitly relies on it. Keep it.
+CREATE TABLE IF NOT EXISTS chunk_quality_signals (
+    chunk_id        UUID PRIMARY KEY REFERENCES document_chunks(id) ON DELETE CASCADE,
+    quality_score   NUMERIC      NOT NULL DEFAULT 0.0,
+    sample_count    INTEGER      NOT NULL DEFAULT 0,
+    last_updated    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
 
 -- =============================================================================
--- GROUP 6: ML FOUNDATION (created now, populated Phase 4+)
+-- Schema Group 6: ML Foundation (tables now, populated Phase 4)
 -- =============================================================================
 
-CREATE TABLE feature_definitions (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    version         VARCHAR(50) NOT NULL UNIQUE,
-    description     TEXT,
-    feature_specs   JSONB NOT NULL DEFAULT '[]'::jsonb,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_by      VARCHAR(255)
-);
-
-CREATE TABLE ml_models (
-    id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    model_name              VARCHAR(100) NOT NULL,
-    model_version           VARCHAR(50) NOT NULL,
-    model_type              VARCHAR(50) NOT NULL,
-    feature_set_version     VARCHAR(50),
-    training_data_start     TIMESTAMPTZ,
-    training_data_end       TIMESTAMPTZ,
-    training_row_count      INTEGER,
-    holdout_row_count       INTEGER,
-    metrics                 JSONB DEFAULT '{}'::jsonb,
-    hyperparameters         JSONB DEFAULT '{}'::jsonb,
-    artifact_path           VARCHAR(500),
-    is_active               BOOLEAN NOT NULL DEFAULT FALSE,
-    activated_at            TIMESTAMPTZ,
-    activated_by            VARCHAR(255),
-    notes                   TEXT,
-    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+CREATE TABLE IF NOT EXISTS ml_models (
+    id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    model_name           VARCHAR(100) NOT NULL,
+    model_version        VARCHAR(50)  NOT NULL,
+    model_type           VARCHAR(50)  NOT NULL,
+    feature_set_version  VARCHAR(50),
+    training_data_start  TIMESTAMPTZ,
+    training_data_end    TIMESTAMPTZ,
+    training_row_count   INTEGER,
+    holdout_row_count    INTEGER,
+    metrics              JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    hyperparameters      JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    artifact_path        VARCHAR(500),
+    is_active            BOOLEAN      NOT NULL DEFAULT FALSE,
+    activated_at         TIMESTAMPTZ,
+    activated_by         VARCHAR(255),
+    notes                TEXT,
+    created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     UNIQUE (model_name, model_version)
 );
-CREATE INDEX idx_models_active ON ml_models (model_name, is_active) WHERE is_active = TRUE;
+CREATE INDEX IF NOT EXISTS idx_models_active ON ml_models (model_name, is_active);
 
-CREATE TABLE ml_predictions (
+CREATE TABLE IF NOT EXISTS ml_predictions (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    model_id            UUID NOT NULL REFERENCES ml_models(id) ON DELETE CASCADE,
+    model_id            UUID         NOT NULL REFERENCES ml_models(id) ON DELETE CASCADE,
     run_id              UUID REFERENCES production_runs(id) ON DELETE SET NULL,
     event_id            UUID,
     event_type          VARCHAR(50),
-    prediction          JSONB NOT NULL,
-    explanation         JSONB DEFAULT '{}'::jsonb,
-    input_features      JSONB DEFAULT '{}'::jsonb,
+    prediction          JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    explanation         JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    input_features      JSONB        NOT NULL DEFAULT '{}'::jsonb,
     actual_outcome      VARCHAR(50),
     outcome_recorded_at TIMESTAMPTZ,
     message_id          UUID REFERENCES messages(id) ON DELETE SET NULL,
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_predictions_model ON ml_predictions (model_id, created_at DESC);
-CREATE INDEX idx_predictions_run   ON ml_predictions (run_id);
+CREATE INDEX IF NOT EXISTS idx_predictions_model_run ON ml_predictions (model_id, run_id);
 
-CREATE TABLE feature_snapshots (
-    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    run_id              UUID REFERENCES production_runs(id) ON DELETE SET NULL,
-    event_id            UUID,
-    event_type          VARCHAR(50),
-    feature_set_version VARCHAR(50) NOT NULL,
-    features            JSONB NOT NULL,
-    label               VARCHAR(50),
-    label_source        VARCHAR(100),
-    window_start        TIMESTAMPTZ,
-    window_end          TIMESTAMPTZ,
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS feature_snapshots (
+    id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    run_id               UUID REFERENCES production_runs(id) ON DELETE SET NULL,
+    event_id             UUID,
+    event_type           VARCHAR(50),
+    feature_set_version  VARCHAR(50)  NOT NULL,
+    features             JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    label                VARCHAR(50),
+    label_source         VARCHAR(100),
+    window_start         TIMESTAMPTZ,
+    window_end           TIMESTAMPTZ,
+    created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_features_set      ON feature_snapshots (feature_set_version);
-CREATE INDEX idx_features_event    ON feature_snapshots (event_type, event_id);
+CREATE INDEX IF NOT EXISTS idx_snapshots_run         ON feature_snapshots (run_id);
+CREATE INDEX IF NOT EXISTS idx_snapshots_label       ON feature_snapshots (label);
+CREATE INDEX IF NOT EXISTS idx_snapshots_feature_set ON feature_snapshots (feature_set_version);
+
+CREATE TABLE IF NOT EXISTS feature_definitions (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    version       VARCHAR(50) NOT NULL UNIQUE,
+    description   TEXT,
+    feature_specs JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by    VARCHAR(255)
+);
 
 -- =============================================================================
--- GROUP 7: CONFIGURATION & VERSIONING
+-- Schema Group 7: Configuration & Versioning
 -- =============================================================================
 
-CREATE TABLE prompt_versions (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    prompt_name     VARCHAR(100) NOT NULL,
-    version         VARCHAR(50) NOT NULL,
-    content         TEXT NOT NULL,
-    is_active       BOOLEAN NOT NULL DEFAULT FALSE,
-    activated_at    TIMESTAMPTZ,
-    notes           TEXT,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_by      VARCHAR(255),
+CREATE TABLE IF NOT EXISTS prompt_versions (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    prompt_name   VARCHAR(100) NOT NULL,
+    version       VARCHAR(50)  NOT NULL,
+    content       TEXT         NOT NULL,
+    is_active     BOOLEAN      NOT NULL DEFAULT FALSE,
+    activated_at  TIMESTAMPTZ,
+    notes         TEXT,
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    created_by    VARCHAR(255),
     UNIQUE (prompt_name, version)
 );
-CREATE INDEX idx_prompts_active ON prompt_versions (prompt_name, is_active) WHERE is_active = TRUE;
+CREATE INDEX IF NOT EXISTS idx_prompts_active ON prompt_versions (prompt_name, is_active);
 
-CREATE TABLE business_rules (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    rule_name       VARCHAR(100) NOT NULL,
-    line_id         VARCHAR(50) NOT NULL,
-    condition       JSONB NOT NULL,
-    conclusion      TEXT NOT NULL,
-    severity        VARCHAR(20) NOT NULL DEFAULT 'info',
-    category        VARCHAR(50),
-    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
-    version         VARCHAR(50),
-    created_by      VARCHAR(255),
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT business_rules_severity_chk
-      CHECK (severity IN ('info','warning','critical'))
+CREATE TABLE IF NOT EXISTS business_rules (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    rule_name   VARCHAR(100) NOT NULL,
+    line_id     VARCHAR(50)  NOT NULL,
+    condition   JSONB        NOT NULL,
+    conclusion  TEXT         NOT NULL,
+    severity    VARCHAR(20)  NOT NULL DEFAULT 'info',
+    category    VARCHAR(50),
+    is_active   BOOLEAN      NOT NULL DEFAULT TRUE,
+    version     VARCHAR(50)  NOT NULL DEFAULT 'v1',
+    created_by  VARCHAR(255),
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (rule_name, version)
 );
-CREATE INDEX idx_rules_line_active ON business_rules (line_id, is_active) WHERE is_active = TRUE;
+CREATE INDEX IF NOT EXISTS idx_rules_active_line ON business_rules (line_id, is_active);
 
 -- =============================================================================
--- GROUP 8: AUDIT (append-only)
+-- Schema Group 8: Audit Log (append-only)
 -- =============================================================================
 
-CREATE TABLE audit_log (
-    id              BIGSERIAL PRIMARY KEY,
-    event_type      VARCHAR(50) NOT NULL,
-    user_id         VARCHAR(255),
-    session_id      VARCHAR(255),
-    entity_type     VARCHAR(50),
-    entity_id       VARCHAR(255),
-    details         JSONB DEFAULT '{}'::jsonb,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS audit_log (
+    id          BIGSERIAL PRIMARY KEY,
+    event_type  VARCHAR(50)  NOT NULL,
+    user_id     VARCHAR(255),
+    session_id  VARCHAR(255),
+    entity_type VARCHAR(50),
+    entity_id   VARCHAR(255),
+    details     JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_audit_event_time ON audit_log (event_type, created_at DESC);
-CREATE INDEX idx_audit_user_time  ON audit_log (user_id, created_at DESC);
-CREATE INDEX idx_audit_entity     ON audit_log (entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_event_time  ON audit_log (event_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_user_time   ON audit_log (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_entity      ON audit_log (entity_type, entity_id);
+
+-- Enforce append-only at the application layer; also block UPDATE/DELETE here
+-- so an out-of-band actor can't tamper.
+CREATE OR REPLACE FUNCTION audit_log_immutable() RETURNS TRIGGER AS $$
+BEGIN
+    RAISE EXCEPTION 'audit_log is append-only';
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS trg_audit_no_update ON audit_log;
+CREATE TRIGGER trg_audit_no_update BEFORE UPDATE OR DELETE ON audit_log
+    FOR EACH ROW EXECUTE FUNCTION audit_log_immutable();
 
 -- =============================================================================
--- AUXILIARY: chunk_quality_signals (rolling aggregate for retrieval re-ranking)
+-- Schema Group 9: Tag Registry (discovered tag metadata)
 -- =============================================================================
 
-CREATE TABLE chunk_quality_signals (
-    chunk_id            UUID PRIMARY KEY REFERENCES document_chunks(id) ON DELETE CASCADE,
-    positive_count      INTEGER NOT NULL DEFAULT 0,
-    negative_count      INTEGER NOT NULL DEFAULT 0,
-    cited_count         INTEGER NOT NULL DEFAULT 0,
-    quality_score       NUMERIC(4,3) NOT NULL DEFAULT 0.000,
-    last_updated        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS tag_registry (
+    id                          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    server_item_name            VARCHAR(500) NOT NULL UNIQUE,
+    description                 VARCHAR(500),
+    data_type                   VARCHAR(50),
+    plant_number                VARCHAR(10),
+    server_description          VARCHAR(500),
+    uns_path                    VARCHAR(500),
+    discovered_class            VARCHAR(40),
+    classification_rule_matched VARCHAR(100),
+    manual_override_class       VARCHAR(40),
+    override_reason             TEXT,
+    overridden_by               VARCHAR(255),
+    overridden_at               TIMESTAMPTZ,
+    tier                        VARCHAR(10) NOT NULL DEFAULT 'tier2',
+    routing_keywords            TEXT[]      NOT NULL DEFAULT '{}',
+    first_seen                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen                   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    is_active                   BOOLEAN     NOT NULL DEFAULT TRUE,
+    setpoint_partner_item       VARCHAR(500)
 );
+CREATE INDEX IF NOT EXISTS idx_tagreg_class  ON tag_registry (discovered_class);
+CREATE INDEX IF NOT EXISTS idx_tagreg_active ON tag_registry (is_active);
+CREATE INDEX IF NOT EXISTS idx_tagreg_tier   ON tag_registry (tier);
 
 -- =============================================================================
--- AUXILIARY: updated_at trigger
+-- updated_at triggers
 -- =============================================================================
 
-CREATE OR REPLACE FUNCTION set_updated_at() RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION touch_updated_at() RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
@@ -532,16 +584,17 @@ END;
 $$ LANGUAGE plpgsql;
 
 DO $$
-DECLARE
-    t TEXT;
-    tables TEXT[] := ARRAY[
-        'documents','production_runs','downtime_events','quality_results',
-        'defect_events','user_profiles','business_rules'
-    ];
+DECLARE t TEXT;
 BEGIN
-    FOREACH t IN ARRAY tables LOOP
+    FOR t IN SELECT unnest(ARRAY[
+        'documents', 'production_runs', 'downtime_events', 'quality_results',
+        'defect_events', 'work_orders', 'event_clips', 'business_rules'
+    ]) LOOP
         EXECUTE format(
-            'CREATE TRIGGER trg_%I_updated_at BEFORE UPDATE ON %I '
-            'FOR EACH ROW EXECUTE FUNCTION set_updated_at()', t, t);
+            'DROP TRIGGER IF EXISTS trg_touch_%I ON %I; '
+            'CREATE TRIGGER trg_touch_%I BEFORE UPDATE ON %I '
+            'FOR EACH ROW EXECUTE FUNCTION touch_updated_at();',
+            t, t, t, t
+        );
     END LOOP;
 END $$;

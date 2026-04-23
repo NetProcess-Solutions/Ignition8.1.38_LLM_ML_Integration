@@ -53,6 +53,13 @@ class Settings(BaseSettings):
     active_system_prompt_name: str = "system_prompt"
     active_context_template_name: str = "chat_context_template"
 
+    # v2.0 nightly integrations (design sections 7.2 / 7.3)
+    scheduler_enabled: bool = False
+    nightly_jobs_interval_seconds: int = 86400
+    wo_sync_enabled: bool = False
+    ignition_wo_db_url: str = ""
+    symphony_backfill_enabled: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

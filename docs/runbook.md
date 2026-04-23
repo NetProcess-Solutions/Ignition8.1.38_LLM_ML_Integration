@@ -86,3 +86,46 @@ gunzip -c backup-2026-04-22.sql.gz \
 | pgvector extension missing | Wrong base image or DB created before init script ran | Drop the volume: `docker compose down -v && docker compose up -d` |
 | `No active prompt found` | Forgot to run the seed script | `docker compose exec ai-service python -m scripts.seed_initial_data` |
 | LLM hallucination noticed | Prompt drift, too few sources retrieved | Review `messages.context_snapshot.summary`; raise `RETRIEVAL_TOP_K` or ingest more docs; consider a stricter system prompt |
+
+## v2.0 nightly integrations
+
+The orchestrator ships with two optional nightly jobs (off by default).
+Enable them by setting environment variables in `service/.env`:
+
+```
+SCHEDULER_ENABLED=true
+WO_SYNC_ENABLED=true
+IGNITION_WO_DB_URL=postgresql+asyncpg://wo_user:secret@wo-host:5432/ignition_wo
+SYMPHONY_BACKFILL_ENABLED=true
+```
+
+Restart the service to pick them up. Logs are emitted as
+`wo_sync_complete` and `symphony_backfill_complete` events.
+
+## Tag discovery (Ignition Gateway)
+
+The gateway script `ai.discovery.runDiscovery()` walks the Coater 1 tag
+tree and writes `tag_registry`. Schedule it as a nightly Gateway Timer
+(03:00 local). The orchestrator then uses tag_registry to drive tier-1
+and tier-2 tag selection per query.
+
+To re-run on demand from a Designer script console:
+
+```python
+import ai.discovery as d
+d.runDiscovery()
+```
+
+## Anchor parsing audit
+
+When a chat answer looks wrong, fetch its parsed anchor:
+
+```sql
+SELECT context_snapshot->'parsed_anchor', context_snapshot->'excluded_buckets'
+FROM messages WHERE id = '<message_id>';
+```
+
+If `anchor_status` is `clarification_needed_*` the orchestrator
+short-circuited and asked for clarification. If `anchor_type` is
+`past_event` and the answer mentions a current tag value, that's a
+prompt regression — escalate.

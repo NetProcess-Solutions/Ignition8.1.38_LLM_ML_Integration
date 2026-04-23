@@ -148,7 +148,51 @@ def parse_quality_csv(path: Path, line_id: str) -> tuple[list[ParsedDocument], l
 # Storage
 # -----------------------------------------------------------------------------
 
+# Per design §5.6: document_role drives document_weight, which multiplies the
+# similarity * (1 + quality_adj) score at retrieval time. Plant-specific
+# evidence (memory, work_orders, internal SOPs) outranks textbook/vendor docs.
+DOCUMENT_ROLE_BY_SOURCE_TYPE: dict[str, str] = {
+    "maintenance_report": "maintenance_history",
+    "work_order": "work_order",
+    "downtime_log": "operational_log",
+    "quality_report": "quality_record",
+    "quality_report_csv": "quality_record",
+    "shift_handoff": "operational_log",
+    "sop": "internal_sop",
+    "internal_sop": "internal_sop",
+    "vendor_manual": "vendor_doc",
+    "tribal_knowledge": "tribal_knowledge",
+    "training_material": "training_material",
+    "engineering_note": "engineering_note",
+}
+
+DOCUMENT_WEIGHT_BY_ROLE: dict[str, float] = {
+    "tribal_knowledge": 1.30,
+    "internal_sop": 1.20,
+    "engineering_note": 1.20,
+    "maintenance_history": 1.15,
+    "work_order": 1.15,
+    "operational_log": 1.10,
+    "quality_record": 1.10,
+    "training_material": 0.85,
+    "vendor_doc": 0.70,
+}
+
+
+def role_and_weight_for(source_type: str) -> tuple[str, float]:
+    role = DOCUMENT_ROLE_BY_SOURCE_TYPE.get(source_type, "operational_log")
+    weight = DOCUMENT_WEIGHT_BY_ROLE.get(role, 1.0)
+    return role, weight
+
+
 async def upsert_document(session, doc: ParsedDocument, batch_id: uuid.UUID) -> uuid.UUID:
+    role, weight = role_and_weight_for(doc.source_type)
+    # Stamp role/weight into metadata so downstream consumers always see it
+    # even if the column read path changes.
+    md = dict(doc.metadata or {})
+    md.setdefault("document_role", role)
+    md.setdefault("document_weight", weight)
+
     existing = (await session.execute(
         text(
             """
@@ -172,6 +216,7 @@ async def upsert_document(session, doc: ParsedDocument, batch_id: uuid.UUID) -> 
                 UPDATE documents SET
                     title = :title, author = :author, document_date = :ddate,
                     shift = :shift, raw_text = :rt,
+                    document_role = :role, document_weight = :weight,
                     structured_fields = CAST(:sf AS jsonb),
                     metadata = CAST(:md AS jsonb),
                     ingestion_batch_id = :batch, updated_at = NOW()
@@ -181,8 +226,9 @@ async def upsert_document(session, doc: ParsedDocument, batch_id: uuid.UUID) -> 
             {
                 "title": doc.title, "author": doc.author, "ddate": doc.document_date,
                 "shift": doc.shift, "rt": doc.raw_text,
+                "role": role, "weight": weight,
                 "sf": json.dumps(doc.structured_fields or {}),
-                "md": json.dumps(doc.metadata or {}),
+                "md": json.dumps(md),
                 "batch": batch_id, "id": doc_id,
             },
         )
@@ -194,11 +240,15 @@ async def upsert_document(session, doc: ParsedDocument, batch_id: uuid.UUID) -> 
             """
             INSERT INTO documents (
                 id, source_type, source_id, line_id, title, author,
-                document_date, shift, raw_text, structured_fields, metadata,
+                document_date, shift, raw_text,
+                document_role, document_weight,
+                structured_fields, metadata,
                 ingestion_batch_id
             ) VALUES (
                 :id, :st, :sid, :line, :title, :author,
-                :ddate, :shift, :rt, CAST(:sf AS jsonb), CAST(:md AS jsonb),
+                :ddate, :shift, :rt,
+                :role, :weight,
+                CAST(:sf AS jsonb), CAST(:md AS jsonb),
                 :batch
             )
             """
@@ -207,8 +257,9 @@ async def upsert_document(session, doc: ParsedDocument, batch_id: uuid.UUID) -> 
             "id": doc_id, "st": doc.source_type, "sid": doc.source_id,
             "line": doc.line_id, "title": doc.title, "author": doc.author,
             "ddate": doc.document_date, "shift": doc.shift, "rt": doc.raw_text,
+            "role": role, "weight": weight,
             "sf": json.dumps(doc.structured_fields or {}),
-            "md": json.dumps(doc.metadata or {}),
+            "md": json.dumps(md),
             "batch": batch_id,
         },
     )

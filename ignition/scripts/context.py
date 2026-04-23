@@ -265,3 +265,101 @@ def buildCuratedContext(lineId=None, selectedTagNames=None):
         "recipe":                    recipe,
         "historian_window_minutes":  cfg.HISTORIAN_WINDOW_MINUTES,
     }
+
+
+# -----------------------------------------------------------------------------
+# v2.0 helpers (design sections 3.5 / 5.7) — read tag_registry to drive
+# tier-1 (always-included) and tier-2 (failure-mode-relevant) tag selection,
+# and accept an anchor_time so past-event queries get the right historian
+# window.
+# -----------------------------------------------------------------------------
+
+DB_CONNECTION_NAME = getattr(cfg, "PG_DB_CONNECTION", "ai_chatbot_pg")
+
+
+def _registry_tier1(line_id):
+    """Tags that are ALWAYS included regardless of query (tier-1).
+    Defined as: tag_class in ('setpoint_tracking','process_following') AND
+    metadata->>'tier' = '1' OR friendly_name in cfg.TIER1_FRIENDLY_NAMES.
+    """
+    fallback = list(getattr(cfg, 'TIER1_FRIENDLY_NAMES', []))
+    sql = (
+        "SELECT tag_path, friendly_name, unit, target FROM tag_registry "
+        "WHERE line_id = ? AND (metadata->>'tier' = '1' OR friendly_name = ANY(?))"
+    )
+    try:
+        ds = system.db.runPrepQuery(sql, [line_id, fallback], DB_CONNECTION_NAME)
+    except Exception as e:
+        _log.warn('tier1 query failed: %s' % str(e))
+        return []
+    out = []
+    for r in range(ds.getRowCount()):
+        out.append((
+            ds.getValueAt(r, 0),
+            ds.getValueAt(r, 1),
+            ds.getValueAt(r, 2),
+            ds.getValueAt(r, 3),
+        ))
+    return out
+
+
+def _registry_tier2(line_id, failure_mode_scope=None, equipment_scope=None):
+    """Tags scoped by failure mode and/or equipment (tier-2)."""
+    if not failure_mode_scope and not equipment_scope:
+        return []
+    sql = (
+        "SELECT tag_path, friendly_name, unit, target FROM tag_registry "
+        "WHERE line_id = ? "
+        " AND (metadata->'failure_modes' ? ? OR metadata->'equipment' ? ?)"
+    )
+    try:
+        ds = system.db.runPrepQuery(
+            sql,
+            [line_id, failure_mode_scope or '', equipment_scope or ''],
+            DB_CONNECTION_NAME,
+        )
+    except Exception as e:
+        _log.warn('tier2 query failed: %s' % str(e))
+        return []
+    out = []
+    for r in range(ds.getRowCount()):
+        out.append((
+            ds.getValueAt(r, 0),
+            ds.getValueAt(r, 1),
+            ds.getValueAt(r, 2),
+            ds.getValueAt(r, 3),
+        ))
+    return out
+
+
+def buildCuratedContextV2(lineId=None, anchorTime=None,
+                          failureModeScope=None, equipmentScope=None):
+    """
+    v2 entrypoint. Replaces selectedTagNames with registry-driven
+    tier-1 + tier-2 selection, and accepts an anchor_time so the
+    historian window can be aligned to a past event rather than 'now'.
+    """
+    line = lineId or cfg.LINE_ID
+    snapshot_time = _iso(system.date.now())
+
+    tier1 = _registry_tier1(line)
+    tier2 = _registry_tier2(line, failureModeScope, equipmentScope)
+    selected = list(set([n for (_, n, _, _) in tier1 + tier2]))
+    if not selected:
+        selected = None  # fall back to legacy KEY_TAG_PATHS behavior
+
+    # Reuse v1 implementation for the actual reads.
+    base = buildCuratedContext(lineId=line, selectedTagNames=selected)
+
+    # If the caller gave us an anchor_time we attach the v2 anchor block
+    # so the orchestrator does not have to re-parse from text alone.
+    if anchorTime:
+        base['anchor'] = {
+            'anchor_type': 'past_event',
+            'anchor_time': anchorTime,
+            'anchor_status': 'resolved',
+            'failure_mode_scope': failureModeScope,
+            'equipment_scope': equipmentScope,
+        }
+    base['_snapshot_time_v2'] = snapshot_time
+    return base

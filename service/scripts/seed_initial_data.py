@@ -34,6 +34,17 @@ PROMPTS_TO_SEED = [
         "version": "v1",
         "file": PROMPTS_DIR / "system_prompt_v1.txt",
         "notes": "Initial RAG-grounded system prompt with anti-hallucination rules",
+        "activate": False,
+    },
+    {
+        "name": "system_prompt",
+        "version": "v2",
+        "file": PROMPTS_DIR / "system_prompt_v2.txt",
+        "notes": (
+            "v2 grounding-first doctrine: parsed anchor, conditional buckets, "
+            "narrowed refusal, full v2.0 citation provenance taxonomy."
+        ),
+        "activate": True,
     },
 ]
 
@@ -82,31 +93,32 @@ async def seed_prompts(session) -> None:
             print(f"  ! prompt file missing: {path}")
             continue
         content = path.read_text(encoding="utf-8")
+        activate = bool(p.get("activate", True))
         await session.execute(
             text(
                 """
                 INSERT INTO prompt_versions (prompt_name, version, content, is_active, activated_at, notes, created_by)
-                VALUES (:name, :ver, :content, TRUE, NOW(), :notes, 'seed_script')
+                VALUES (:name, :ver, :content, :active, CASE WHEN :active THEN NOW() ELSE NULL END, :notes, 'seed_script')
                 ON CONFLICT (prompt_name, version) DO UPDATE
                   SET content = EXCLUDED.content,
-                      is_active = TRUE,
-                      activated_at = NOW(),
                       notes = EXCLUDED.notes
                 """
             ),
-            {"name": p["name"], "ver": p["version"], "content": content, "notes": p["notes"]},
+            {"name": p["name"], "ver": p["version"], "content": content,
+             "notes": p["notes"], "active": activate},
         )
-        # Deactivate other versions of this prompt
-        await session.execute(
-            text(
-                """
-                UPDATE prompt_versions SET is_active = FALSE
-                WHERE prompt_name = :name AND version <> :ver
-                """
-            ),
-            {"name": p["name"], "ver": p["version"]},
-        )
-        print(f"  + prompt seeded: {p['name']} {p['version']}")
+        if activate:
+            # Deactivate other versions of this prompt
+            await session.execute(
+                text(
+                    """
+                    UPDATE prompt_versions SET is_active = FALSE
+                    WHERE prompt_name = :name AND version <> :ver
+                    """
+                ),
+                {"name": p["name"], "ver": p["version"]},
+            )
+        print(f"  + prompt seeded: {p['name']} {p['version']} (active={activate})")
 
 
 async def seed_rules(session) -> None:
