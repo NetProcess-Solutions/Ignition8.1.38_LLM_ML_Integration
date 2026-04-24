@@ -115,6 +115,9 @@ async def get_failure_mode_matched_runs(
             r.run_number,
             r.product_style,
             r.front_step,
+            r.recipe_id,
+            r.target_specs,
+            r.metadata,
             r.start_time,
             r.end_time,
             d.id          AS defect_id,
@@ -135,7 +138,20 @@ async def get_failure_mode_matched_runs(
         {"line": line_id, "style": style, "fm": failure_mode,
          "before": before, "lim": limit},
     )).mappings().all()
-    return [dict(r) for r in rows]
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        d = dict(r)
+        # Surface metadata.crew (if present) to a top-level "crew" key so
+        # downstream code (services.change_ledger) can read it without
+        # knowing the metadata layout.
+        meta = d.get("metadata") or {}
+        if isinstance(meta, dict):
+            if "crew" in meta and "crew" not in d:
+                d["crew"] = meta.get("crew")
+            if "shift" in meta and "shift" not in d:
+                d["shift"] = meta.get("shift")
+        out.append(d)
+    return out
 
 
 # ---------------------------------------------------------------------------

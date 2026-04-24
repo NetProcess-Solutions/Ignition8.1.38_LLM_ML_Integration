@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 from models.schemas import (
     BucketExclusion,
@@ -191,6 +192,59 @@ def _render_work_orders(wos, next_id, citations) -> str:
     return "\n".join(lines)
 
 
+def _render_change_ledger(cl: Any) -> str:
+    """Render the B9 ChangeLedger into a compact, LLM-readable block."""
+    lines: list[str] = []
+    tag_deltas = getattr(cl, "tag_deltas", []) or []
+    if tag_deltas:
+        lines.append("TAG DELTAS vs. matched-history baseline (sigma-ranked):")
+        for d in tag_deltas:
+            lines.append(
+                f"  - {d.tag_name}: current={d.current_value:.4g} | "
+                f"baseline={d.baseline_mean:.4g}±{d.baseline_std:.4g} | "
+                f"σ={d.sigma:+.2f} ({d.direction})"
+            )
+    recipe_deltas = getattr(cl, "recipe_deltas", []) or []
+    if recipe_deltas:
+        lines.append("")
+        lines.append("RECIPE / SETPOINT DELTAS:")
+        for d in recipe_deltas:
+            lines.append(
+                f"  - {d.field}: current={d.current!r} vs. baseline={d.baseline!r}"
+                f"   ({d.note})"
+            )
+    crew_delta = getattr(cl, "crew_delta", None)
+    if crew_delta is not None:
+        lines.append("")
+        lines.append(
+            f"CREW / SHIFT DELTA: {crew_delta.note}"
+        )
+    changeovers = getattr(cl, "equipment_changeovers", []) or []
+    if changeovers:
+        lines.append("")
+        lines.append("EQUIPMENT CHANGEOVERS BETWEEN PRIOR MATCHED RUN AND NOW:")
+        for c in changeovers:
+            wo = c.wo_number or "(no WO#)"
+            when = c.wo_date.isoformat() if c.wo_date else ""
+            summ = (c.summary or "")[:160]
+            lines.append(f"  - {c.equipment_id} | WO {wo} {when} — {summ}")
+    return "\n".join(lines) if lines else "(no change-ledger entries)"
+
+
+def _render_multivariate_anomaly(an: Any) -> str:
+    """Render the B7 AnomalyResult."""
+    contributing = ", ".join(getattr(an, "contributing_tags", []) or []) or "n/a"
+    return (
+        f"Mahalanobis distance: {an.score:.2f}   "
+        f"threshold (p95 of training): {an.threshold:.2f}\n"
+        f"Training sample size: {an.sample_size}\n"
+        f"Top-contributing tags (per-dim |z|): {contributing}\n"
+        "Interpretation: the joint state of these tags is unusual relative\n"
+        "to the historical distribution for this (style, front_step). No\n"
+        "single tag may be flagged as deviant — this is a JOINT signal."
+    )
+
+
 def assemble_prompt(
     *,
     user_query: str,
@@ -205,6 +259,8 @@ def assemble_prompt(
     user_role: str | None = None,
     response_detail_level: str = "standard",
     response_style: str = "balanced",
+    change_ledger: Any = None,  # services.change_ledger.ChangeLedger | None
+    multivariate_anomaly: Any = None,  # services.anomaly.AnomalyResult | None
 ) -> AssembledPrompt:
     citations: list[SourceCitation] = []
     excluded: list[BucketExclusion] = list(curated.excluded_buckets or [])
@@ -457,6 +513,20 @@ def assemble_prompt(
         "\n".join(profile_lines),
     ))
 
+    # ---- B9 — Change ledger (auto-computed deltas vs. matched history) ----
+    if change_ledger is not None and not getattr(change_ledger, "is_empty", True):
+        blocks.append(_section(
+            "CHANGE LEDGER (auto-computed; treat as leading hypotheses)",
+            _render_change_ledger(change_ledger),
+        ))
+
+    # ---- B7 — Multivariate anomaly score (joint state vs. cluster) -------
+    if multivariate_anomaly is not None and getattr(multivariate_anomaly, "is_anomaly", False):
+        blocks.append(_section(
+            "MULTIVARIATE ANOMALY (joint tag state)",
+            _render_multivariate_anomaly(multivariate_anomaly),
+        ))
+
     blocks.append(_section("USER QUESTION", user_query.strip()))
 
     user_block = "\n".join(blocks)
@@ -474,6 +544,20 @@ def assemble_prompt(
         "matched_history": len(matched_history),
         "work_orders": len(work_orders),
         "camera_clips": len(curated.attached_clips),
+        "change_ledger_entries": (
+            (
+                len(getattr(change_ledger, "tag_deltas", []) or [])
+                + len(getattr(change_ledger, "recipe_deltas", []) or [])
+                + (1 if getattr(change_ledger, "crew_delta", None) else 0)
+                + len(getattr(change_ledger, "equipment_changeovers", []) or [])
+            )
+            if change_ledger is not None else 0
+        ),
+        "multivariate_anomaly": (
+            1 if multivariate_anomaly is not None
+            and getattr(multivariate_anomaly, "is_anomaly", False)
+            else 0
+        ),
         "total_citations": len(citations),
     }
 

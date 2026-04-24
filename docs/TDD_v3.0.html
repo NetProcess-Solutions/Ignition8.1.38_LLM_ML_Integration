@@ -1,0 +1,1798 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Coater 1 Intelligent Operations Advisor</title>
+  <style>/* ========================================================================
+   Coater 1 TDD v3.0 — print stylesheet
+   Matches the v2.0 visual identity:
+     red  #C8102E for H1/H2 + banner-row tables
+     navy #1F3A5F for H3/H4 + caption text
+     body Calibri/Helvetica 10.5pt with 1.4 line height
+   ======================================================================== */
+
+@page {
+  size: Letter;
+  margin: 0.85in 0.85in 1.0in 0.85in;
+  @bottom-center {
+    content: "Coater 1 Intelligent Operations Advisor  ·  Technical Design Document  ·  Page " counter(page) " of " counter(pages);
+    font-family: "Helvetica", "Arial", sans-serif;
+    font-size: 9pt;
+    color: #555;
+  }
+}
+
+@page :first {
+  margin: 0;
+  @bottom-center { content: ""; }
+}
+
+/* ----- typography ------------------------------------------------------ */
+html, body {
+  font-family: "Calibri", "Helvetica", "Arial", sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.4;
+  color: #1a1a1a;
+}
+
+h1 {
+  font-family: "Helvetica", "Arial", sans-serif;
+  color: #C8102E;
+  font-size: 22pt;
+  margin: 0 0 0.4em 0;
+  padding-bottom: 0.15em;
+  border-bottom: 2px solid #C8102E;
+  page-break-after: avoid;
+}
+h2 {
+  color: #C8102E;
+  font-size: 14pt;
+  margin: 1.4em 0 0.4em 0;
+  page-break-after: avoid;
+}
+h3 {
+  color: #1F3A5F;
+  font-size: 12pt;
+  margin: 1.1em 0 0.3em 0;
+  page-break-after: avoid;
+}
+h4 {
+  color: #1F3A5F;
+  font-size: 10.8pt;
+  margin: 0.9em 0 0.25em 0;
+  font-weight: bold;
+  page-break-after: avoid;
+}
+
+p { margin: 0.4em 0 0.5em 0; orphans: 3; widows: 3; }
+ul, ol { margin: 0.3em 0 0.6em 1.4em; padding: 0; }
+li { margin: 0.15em 0; }
+
+a { color: #1F3A5F; text-decoration: none; }
+a:visited { color: #1F3A5F; }
+
+strong { color: #1a1a1a; }
+em { color: #2a2a2a; }
+
+/* ----- code ------------------------------------------------------------ */
+code {
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  font-size: 9.2pt;
+  background: #f4f4f4;
+  padding: 0 3px;
+  border-radius: 2px;
+}
+pre {
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  font-size: 8.8pt;
+  background: #f4f4f4;
+  border-left: 3px solid #1F3A5F;
+  padding: 0.55em 0.7em;
+  margin: 0.5em 0 0.8em 0;
+  white-space: pre-wrap;
+  page-break-inside: avoid;
+  line-height: 1.3;
+}
+pre code { background: none; padding: 0; font-size: inherit; }
+
+/* ----- tables (banner-style red header rows) -------------------------- */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.55em 0 0.9em 0;
+  font-size: 9.5pt;
+  page-break-inside: avoid;
+}
+th {
+  background: #C8102E;
+  color: #fff;
+  text-align: left;
+  font-weight: bold;
+  padding: 5px 8px;
+  vertical-align: top;
+}
+td {
+  border: 1px solid #d8d8d8;
+  padding: 5px 8px;
+  vertical-align: top;
+}
+tr:nth-child(even) td { background: #f7f9fc; }
+
+/* ----- delta-vs-v2.0 callout ------------------------------------------ */
+.delta-box {
+  border: 1px solid #1F3A5F;
+  border-left: 5px solid #C8102E;
+  background: #f9fbff;
+  padding: 0.55em 0.85em;
+  margin: 0.9em 0 1.2em 0;
+  font-size: 9.8pt;
+  page-break-inside: avoid;
+}
+.delta-box .delta-title {
+  font-family: "Helvetica", "Arial", sans-serif;
+  color: #C8102E;
+  font-weight: bold;
+  font-size: 10.2pt;
+  letter-spacing: 0.5px;
+  margin: 0 0 0.35em 0;
+  text-transform: uppercase;
+}
+.delta-box p { margin: 0.2em 0; }
+.delta-box .label {
+  display: inline-block;
+  min-width: 6.5em;
+  font-weight: bold;
+  color: #1F3A5F;
+}
+
+/* ----- chapter pagination -------------------------------------------- */
+section.chapter {
+  page-break-before: always;
+}
+section.chapter > h1:first-child {
+  margin-top: 0;
+}
+
+/* ----- cover page ----------------------------------------------------- */
+section.cover {
+  page-break-after: always;
+  text-align: center;
+  padding-top: 2.0in;
+  height: 9.0in;
+}
+.cover-rule {
+  width: 4.5in;
+  height: 3px;
+  background: #C8102E;
+  margin: 0.5em auto;
+}
+.cover-eyebrow {
+  font-family: "Helvetica", "Arial", sans-serif;
+  color: #1F3A5F;
+  font-size: 30pt;
+  letter-spacing: 4px;
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+.cover-title {
+  font-family: "Helvetica", "Arial", sans-serif;
+  color: #C8102E;
+  font-size: 26pt;
+  letter-spacing: 2px;
+  border: none;
+  margin: 0.4em 0;
+  padding: 0;
+}
+.cover-sub {
+  font-style: italic;
+  font-size: 13pt;
+  color: #1F3A5F;
+  margin: 0.8em 0 0.3em 0;
+}
+.cover-tagline {
+  font-style: italic;
+  font-size: 10.5pt;
+  color: #555;
+  margin: 0 1in;
+}
+.cover-author { margin-top: 2.5in; }
+.cover-name { font-weight: bold; font-size: 14pt; color: #1F3A5F; margin: 0.2em 0; }
+.cover-role, .cover-org { color: #444; margin: 0.1em 0; }
+.cover-date { color: #555; font-style: italic; margin-top: 0.7em; }
+
+/* ----- TOC ----------------------------------------------------------- */
+section.toc {
+  page-break-after: always;
+}
+section.toc h1 {
+  font-size: 24pt;
+  border-bottom: 2px solid #C8102E;
+}
+ol.toc-list {
+  list-style: decimal;
+  margin-left: 1.5em;
+  font-size: 11pt;
+  line-height: 1.8;
+}
+ol.toc-list li a::after {
+  content: "  " leader(".") " " target-counter(attr(href), page);
+  color: #888;
+}
+
+/* ----- internal markdown TOC (per-chapter) --------------------------- */
+.toc {
+  background: #f9f9f9;
+  border-left: 3px solid #1F3A5F;
+  padding: 0.4em 0.8em;
+  font-size: 9.5pt;
+  margin: 0.4em 0 1em 0;
+}
+.toc ul { list-style: disc; margin: 0.2em 0 0.2em 1.4em; }
+
+/* ----- captions / figure notes --------------------------------------- */
+.caption, em.caption, p.caption {
+  display: block;
+  font-style: italic;
+  color: #555;
+  font-size: 9.4pt;
+  margin: -0.3em 0 0.6em 0;
+}
+
+/* ----- highlights / status pills ------------------------------------- */
+.status-shipped, .status-deferred, .status-stub, .status-considering {
+  display: inline-block;
+  font-family: "Helvetica", "Arial", sans-serif;
+  font-size: 8.6pt;
+  font-weight: bold;
+  letter-spacing: 0.4px;
+  padding: 1px 7px;
+  border-radius: 8px;
+  margin-right: 4px;
+  vertical-align: 1px;
+}
+.status-shipped     { background: #1F7A1F; color: #fff; }
+.status-deferred    { background: #777;     color: #fff; }
+.status-stub        { background: #B07A00;  color: #fff; }
+.status-considering { background: #1F3A5F;  color: #fff; }
+
+/* ----- key/value definition lists ------------------------------------ */
+dl { margin: 0.4em 0; }
+dt { font-weight: bold; color: #1F3A5F; margin-top: 0.4em; }
+dd { margin: 0 0 0.3em 1.2em; }
+</style>
+</head>
+<body>
+
+<!-- =========================================================== -->
+<!-- COVER PAGE                                                   -->
+<!-- =========================================================== -->
+<section class="cover">
+  <div class="cover-rule"></div>
+  <h1 class="cover-eyebrow">COATER 1</h1>
+  <h1 class="cover-title">INTELLIGENT OPERATIONS ADVISOR</h1>
+  <div class="cover-rule"></div>
+  <p class="cover-sub">Technical Design Document — v3.0 As-Built Reference</p>
+  <p class="cover-tagline">As-built reference for grounded conversational AI on a continuous latex carpet coating line</p>
+  <div class="cover-author">
+    <p class="cover-name">Jordan Taylor</p>
+    <p class="cover-role">Process Engineer, Finishing &amp; Coating</p>
+    <p class="cover-org">Shaw Industries — Plant 4 (F0004), Dalton, GA</p>
+    <p class="cover-date">Version 3.0 &middot; April 2026 &middot; As-Built Reference</p>
+  </div>
+</section>
+
+<!-- =========================================================== -->
+<!-- TABLE OF CONTENTS                                            -->
+<!-- =========================================================== -->
+<section class="toc">
+  <h1>Contents</h1>
+  <ol class="toc-list">
+    
+    <li><a href="#00-revision-history">Revision History & How To Read This Document</a></li>
+    
+    <li><a href="#01-executive-summary">1. Executive Summary</a></li>
+    
+    <li><a href="#02-design-philosophy">2. Problem Statement &amp; Design Philosophy</a></li>
+    
+    <li><a href="#03-system-architecture">3. System Architecture</a></li>
+    
+    <li><a href="#04-anti-hallucination">4. Anti-Hallucination Mechanisms</a></li>
+    
+  </ol>
+</section>
+
+<!-- =========================================================== -->
+<!-- CHAPTERS                                                     -->
+<!-- =========================================================== -->
+
+<section class="chapter" id="00-revision-history">
+<h1 id="revision-history-how-to-read-this-document">Revision History &amp; How To Read This Document</h1>
+<h2 id="document-lineage">Document Lineage</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Status</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">1.0</td>
+<td>January 2026</td>
+<td>Jordan Taylor</td>
+<td>Superseded</td>
+<td>Initial proposal: schema sketch, RAG pipeline, conversation logging.</td>
+</tr>
+<tr>
+<td style="text-align: right;">2.0</td>
+<td>April 2026</td>
+<td>Jordan Taylor</td>
+<td>Superseded by v3.0</td>
+<td>59-page design specification with 29-table schema and anchor-conditional context assembly.</td>
+</tr>
+<tr>
+<td style="text-align: right;"><strong>3.0</strong></td>
+<td><strong>April 23, 2026</strong></td>
+<td><strong>Jordan Taylor</strong></td>
+<td><strong>Current — As-Built</strong></td>
+<td><strong>This document. Reflects shipped code at 145 passing tests / 0 failing.</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Version 2.0 was an <em>aspirational design document</em>. It described the system the way
+it should be built. Version 3.0 — this document — is the <em>as-built reference</em>. It
+describes the system the way it actually exists in source control today. Where
+v2.0 said "we will," v3.0 says "we did," "we did differently," or "we deferred."</p>
+<h2 id="why-a-new-document-instead-of-patching-v20">Why a New Document Instead of Patching v2.0</h2>
+<p>The shipped MVP added six structural capabilities that v2.0 did not contemplate
+in detail:</p>
+<ol>
+<li><strong>Hybrid retrieval</strong> (vector + BM25 trigram, fused via Reciprocal Rank Fusion,
+   diversified with MMR, conditionally boosted by failure-mode and equipment
+   metadata). v2.0 specified pgvector cosine retrieval only.</li>
+<li><strong>Deterministic tool layer</strong> (<code>services/tools.py</code>) with five typed read-only
+   tools the LLM can call to ground its hypotheses in distributional facts —
+   percentile, distribution comparison, nearest historical runs, drift detection,
+   defect-events-in-window.</li>
+<li><strong>Two-step RCA reasoning chain</strong> (<code>services/rca.py</code>) that replaces one-shot
+   RAG when the query has causal intent against a past event, with a hard tool-call
+   budget and a TTL-cached step-1 hypothesis set.</li>
+<li><strong>Distributional grounding</strong> (<code>services/percentiles.py</code>) using Page-Hinkley
+   CUSUM for drift detection and empirical CDF lookups scoped by
+   (style, front_step, equipment, recipe).</li>
+<li><strong>Multivariate Mahalanobis anomaly detection</strong>
+   (<code>services/anomaly.py</code>) on live tag snapshots vs. fitted per-cluster history.</li>
+<li><strong>Change ledger</strong> (<code>services/change_ledger.py</code>) that surfaces "what changed
+   since baseline" deltas (tag sigma, recipe drift, crew/shift, equipment WO)
+   as a labeled evidence section before the LLM call.</li>
+</ol>
+<p>Patching v2.0 in place would have buried these as parenthetical addenda. They
+deserve their own chapters (§6, §7, §8, §15) and they materially change the
+shape of §11's end-to-end walkthrough.</p>
+<h2 id="how-this-document-is-organized">How This Document Is Organized</h2>
+<p>Eighteen chapters plus an appendix. The first eleven chapters mirror the
+v2.0 structure so a reader familiar with the original can see deltas in
+context. Chapters 12–18 are largely new and document operations,
+implementation reality, and the updated phased roadmap.</p>
+<p>Each chapter ends with a coloured <code>Δ vs v2.0</code> callout box. The box has
+three sub-blocks:</p>
+<ul>
+<li><strong>Stayed</strong> — what matched the v2.0 design, verbatim or close to it.</li>
+<li><strong>Changed</strong> — what diverged from the v2.0 design, with the reason.</li>
+<li><strong>Considering</strong> — what is on the table for a future iteration but not
+  in scope today.</li>
+</ul>
+<p>Chapter 17 (<em>Implementation Reality</em>) consolidates every Δ into one place
+for readers who want the deltas without the surrounding prose.</p>
+<h2 id="authoritative-source-for-every-claim">Authoritative Source for Every Claim</h2>
+<p>This document is generated from the source repository at the commit in the
+footer. Every shipped behavior cited here is backed by code I can point to;
+deferred work is labeled <span class="status-deferred">DEFERRED</span> or
+<span class="status-stub">STUB</span>; future work is labeled
+<span class="status-considering">CONSIDERING</span>. Claims that refer to
+the original design without an implementation are explicitly tagged so the
+reader is never asked to take an unsupported assertion on faith.</p>
+<p>A spot-check policy was applied during authoring: every code reference in
+this document was verified against the actual file before publication. If
+you find a discrepancy, the source code wins; this document is wrong and
+should be regenerated.</p>
+<h2 id="audience">Audience</h2>
+<ul>
+<li><strong>Engineers</strong> continuing the project should read 3 (architecture), 5 (schema),
+  6–8 (retrieval, tools/RCA, anomaly), 11 (end-to-end walkthrough), and 17
+  (implementation reality).</li>
+<li><strong>Operators and shift supervisors</strong> should read the executive summary and
+  10 (role-based personalization) — those are the chapters that explain
+  what the chatbot will and will not do for them.</li>
+<li><strong>Reviewers and auditors</strong> should read 4 (anti-hallucination), 9
+  (feedback-learning), 14 (security/audit/compliance), and the test catalog
+  in the appendix.</li>
+<li><strong>Future contributors evaluating new ML or model-hosting decisions</strong> should
+  start with 17 (implementation reality) and 18 (phased roadmap) before
+  diving into the technical chapters.</li>
+</ul>
+<h2 id="notation">Notation</h2>
+<ul>
+<li>File references use repo-relative paths in <code>code font</code>, e.g.
+  <code>service/services/rag.py</code> — open the file from the repo root.</li>
+<li>Database tables use <code>lower_snake_case</code>, e.g. <code>messages</code>, <code>defect_events</code>.</li>
+<li>Class and function names use the repo's actual casing, e.g.
+  <code>CuratedContextPackage</code>, <code>handle_chat</code>.</li>
+<li>Settings keys are referenced as they appear in <code>service/config/settings.py</code>
+  (e.g. <code>retrieval_mmr_lambda</code>, <code>rca_max_total_tool_calls</code>).</li>
+<li>A <code>[T-N]</code> annotation references the original v2.0 task (Task 1 through
+  Task 11). The mapping from those eleven tasks to actually-executed
+  sprints lives in chapter 12.</li>
+</ul>
+<div class="delta-box">
+<p class="delta-title">Δ vs v2.0 — Document structure</p>
+<p><span class="label">Stayed:</span> Eighteen chapters preserve the topical
+shape of v2.0 plus an appendix.</p>
+<p><span class="label">Changed:</span> Five new chapters added (Retrieval Layer,
+Tool Layer &amp; RCA Chain, Distributional Grounding &amp; Anomaly, Tag
+Selection &amp; Gateway Integration, Implementation Reality). Walk-through
+and build-plan chapters rewritten against shipped code.</p>
+<p><span class="label">Considering:</span> A "Performance &amp; Scaling"
+chapter once we have one shift of real production traffic to characterize.</p>
+</div>
+</section>
+
+<section class="chapter" id="01-executive-summary">
+<h1 id="1-executive-summary">1. Executive Summary</h1>
+<h2 id="overview">Overview</h2>
+<p>A read-only conversational AI advisor, embedded in Ignition Perspective, that
+answers operator and engineer questions about Coater 1 using live tag data,
+historian aggregates, maintenance and quality records, downtime and defect
+events, deterministic process rules, distributional baselines, and curated
+line memory. Every response is source-cited, confidence-labeled, and fully
+auditable. The system is shipped — 145 tests pass, 0 fail, 2 skip; the
+schema is built; the RAG pipeline runs end-to-end; the gateway integration
+spec is documented and templates are in place; only the operator-side
+"go-live" steps in §3 of <code>docs/GAP_ANALYSIS.md</code> remain.</p>
+<h2 id="problem-approach">Problem &amp; Approach</h2>
+<p>An industrial chatbot that hallucinates is worse than useless — operator
+trust, once lost, does not return. Off-the-shelf LLMs fabricate tag values,
+invent document references, and answer confidently from insufficient
+evidence. This product is built grounding-first: retrieval quality, citation
+traceability, and refusal behavior are the core value proposition of the
+MVP, not incremental features. Predictive ML (supervised classifiers, vision
+models) is architecturally provisioned but deliberately deferred until the
+grounding layer has proven reliable in production.</p>
+<p>What changed since v2.0: the grounding layer ships with <strong>strictly more
+mechanism</strong> than v2.0 specified. Hybrid retrieval, deterministic tool calls
+the LLM can invoke for distributional facts, an explicit two-step RCA
+reasoning chain, multivariate anomaly detection over the curated tag block,
+and a change ledger that auto-surfaces "what changed since baseline" — all
+contribute to a tighter grounding loop than the v2.0 design contemplated.
+None of these introduce model-side learning; every one of them is
+deterministic, auditable, and bounded.</p>
+<h2 id="key-capabilities-as-built">Key Capabilities (As Built)</h2>
+<ul>
+<li>
+<p><strong>Query-Anchored Context Assembly.</strong> Every query is parsed for its temporal
+  anchor (past event, current state, or pattern) before evidence is
+  assembled. Retrospective queries never see current live tag state;
+  current-state queries never see stale event data. The anchor is explicit,
+  clarified with the user when ambiguous, and audited.
+  ✅ Shipped: <code>service/services/anchor.py</code>, exhaustively tested in
+  <code>service/tests/test_anchor.py</code> and <code>test_anchor_regression.py</code>.</p>
+</li>
+<li>
+<p><strong>Conditional Baselines.</strong> Tag evidence is contextualized against five
+  temporal buckets — 60 min before anchor, 24 h before anchor, a 14-day-prior
+  normal-operation sample, the last four runs prior, and every prior run of
+  the same style matched to the same failure mode. Values are rendered with
+  distribution context, not just raw numbers.
+  ✅ Shipped: <code>services/baseline_cache.py</code>, <code>services/context_assembler.py</code>.</p>
+</li>
+<li>
+<p><strong>Tag-Class Aware Deviation.</strong> Setpoint-tracking, oscillating-controlled,
+  process-following, and discrete-state tags each get appropriate deviation
+  tests. Oscillations around setpoint are recognized as normal operation;
+  amplitude changes are flagged as anomalies.
+  ✅ Shipped: <code>services/deviation.py</code> (was <code>anomaly.py</code>, renamed during B7
+  to disambiguate from the multivariate anomaly detector).</p>
+</li>
+<li>
+<p><strong>Hybrid Retrieval (NEW vs v2.0).</strong> Vector cosine + BM25 trigram fused via
+  Reciprocal Rank Fusion (RRF), conditionally boosted by failure-mode and
+  equipment metadata, then diversified via Maximal Marginal Relevance (MMR)
+  with token-level Jaccard similarity. Bounded retrieval-quality blending
+  from feedback (±30%). Plant-specific document weights (1.0–1.3) override
+  general reference textbook chunks (0.5–0.7).
+  ✅ Shipped: <code>services/retrieval.py::retrieve_chunks_hybrid</code>. Tested in
+  <code>test_retrieval_hybrid.py</code> and <code>test_retrieval_golden.py</code>.</p>
+</li>
+<li>
+<p><strong>Deterministic Tool Layer (NEW vs v2.0).</strong> Five typed read-only tools the
+  LLM can call mid-completion: <code>percentile_of</code>, <code>compare_to_distribution</code>,
+  <code>nearest_historical_runs</code>, <code>detect_drift</code>, <code>defect_events_in_window</code>.
+  Each returns a <code>ToolResult</code> with auto-generated citation. Hard SQL
+  timeouts; no tool ever writes.
+  ✅ Shipped: <code>services/tools.py</code>, <code>services/llm.py::_run_tool_loop</code>.
+  Tested in <code>test_tools.py</code> and <code>test_llm_tool_loop.py</code>.</p>
+</li>
+<li>
+<p><strong>Two-Step RCA Reasoning Chain (NEW vs v2.0).</strong> When the parsed anchor is
+  a past event AND the query has causal intent ("why did", "what caused",
+  "root cause"), the orchestrator dispatches a two-step LLM workflow:
+  (1) generate up to N hypotheses with required evidence, (2) gather evidence
+  via deterministic tools under a hard budget, (3) adjudicate. Step 1 is
+  TTL-cached on <code>(anchor_event_id, anchor_run_id, anchor_time, failure_mode,
+  prompt_version)</code> so repeat questions about the same event do not re-pay.
+  ✅ Shipped: <code>services/rca.py</code>. Tested in <code>test_rca.py</code> and
+  <code>test_rca_e2e.py</code>.</p>
+</li>
+<li>
+<p><strong>Mandatory Source Citations.</strong> Every factual claim carries a numbered,
+  provenance-typed citation (live tag, historian stat, document, event,
+  work order, camera clip, memory, rule, ML prediction, distribution,
+  nearest-runs, drift, tool result). Responses with zero citations are
+  downgraded by the parser and flagged.
+  ✅ Shipped: 19 provenance types in <code>models/schemas.py::SourceCitation.type</code>,
+  validated by <code>services/response_parser.py</code>.</p>
+</li>
+<li>
+<p><strong>Engagement with Honest Labeling.</strong> The advisor engages with the math,
+  abnormalities, and discrepancies it can see. Claims are labeled CONFIRMED
+  FACT, LIKELY CONTRIBUTOR, or HYPOTHESIS. Missing evidence channels (cameras,
+  lab results) are called out in the response as context, not used as grounds
+  for refusal.
+  ✅ Shipped: enforced in <code>service/config/prompts/system_prompt_v2.txt</code>
+  §§4–5 and validated by <code>services/response_parser.py::parse_confidence</code>
+  with downgrade-on-no-citation.</p>
+</li>
+<li>
+<p><strong>Full Audit Records.</strong> Every response persists the exact tags read,
+  aggregates computed, chunks retrieved, memories used, rules matched,
+  parsed anchor, prompt version, model parameters, and the full RCA trace
+  when the chain ran. Any answer can be reconstructed and reviewed.
+  ✅ Shipped: <code>messages.context_snapshot</code> JSONB column populated in
+  <code>services/rag.py::handle_chat</code> Phase 3.</p>
+</li>
+<li>
+<p><strong>Structured Feedback Loop.</strong> A multi-level signal taxonomy feeds a staged
+  memory-candidate workflow. No feedback auto-promotes — every memory entry
+  passes an engineer checkpoint. Bounded ±30% retrieval re-ranking from
+  accumulated chunk quality signals.
+  ✅ Shipped (signals + bounded blending): <code>routers/feedback.py</code>,
+  <code>routers/corrections.py</code>, <code>routers/outcomes.py</code>. Memory candidate
+  promotion UI is <span class="status-deferred">DEFERRED</span> to phase 3.</p>
+</li>
+<li>
+<p><strong>Outcome Closure.</strong> Past-event messages older than 24 h with no outcome
+  linkage are surfaced for follow-up; precision per failure mode is
+  aggregated nightly into the <code>v_rca_precision_daily</code> materialized view.
+  ✅ Shipped: <code>services/outcome_closure.py</code>,
+  <code>scripts/migrations/004_v_rca_precision_daily.sql</code>.</p>
+</li>
+</ul>
+<h2 id="technical-foundation">Technical Foundation</h2>
+<p>PostgreSQL 16 with <code>pgvector</code> (ivfflat index, with <code>hnsw</code> migration plan
+documented in <code>scripts/migrations/003_pgvector_index_migration.sql</code>);
+<code>pg_trgm</code> for keyword retrieval; <code>uuid-ossp</code> for UUID PKs;
+<code>pg_partman</code> for monthly partitioning of <code>messages</code> and <code>audit_log</code> (one
+partition per month, retained 24 months by default). FastAPI orchestration
+with <code>asyncio</code> tool-call loop; per-user rate limiting via <code>slowapi</code> and
+Prometheus metrics via <code>prometheus-fastapi-instrumentator</code>. Ignition
+Perspective front-end with gateway-side Jython 2.7 scripts that read tags,
+query the historian, evaluate alarms, and assemble the curated context
+package. <code>all-MiniLM-L6-v2</code> embeddings (384 dim) served in-process. LLM
+provider is pluggable: OpenAI, Azure OpenAI, or any OpenAI-compatible
+endpoint (vLLM, llama.cpp server, LM Studio); switching providers is a
+single <code>LLM_PROVIDER</code> env-var change.</p>
+<p>Tag discovery is <strong>scaffolded but not yet wired</strong>: the <code>tag_registry</code> table
+exists and the <code>ItemInstance</code>-query design is documented (§15), but the
+gateway-side enumeration runs through a hardcoded <code>KEY_TAGS</code> list in
+<code>ignition/scripts/config.py</code> for the MVP. The pre-screen <code>services/tag_selector.py</code>
+filters that catalog by category and keyword to keep curated payloads
+bounded. This is a deliberate MVP simplification with a documented path
+forward (§15 and <code>/memories/repo/optimization_backlog.md</code>).</p>
+<p>Symphony camera integration is <span class="status-stub">STUB</span>:
+<code>services/symphony_capture.py</code> returns <code>extraction_status="stub"</code> until the
+Symphony API endpoint and auth credentials are wired in. Schema
+(<code>event_clips</code> table) is in place from day one so live wiring is purely an
+adapter swap.</p>
+<p>The full schema (29 tables across 9 domains plus a 30th <code>failure_modes</code>
+reference table that backs the closed enum) is provisioned by
+<code>scripts/setup_database.sql</code> on first container start.</p>
+<h2 id="scope-phased-roadmap-updated">Scope &amp; Phased Roadmap (Updated)</h2>
+<ul>
+<li>
+<p><strong>MVP (Phase 1–2):</strong> ✅ <strong>Shipped.</strong> Grounded RAG chat with query-anchored
+  context, conditional baselines, tag-class aware deviation, hybrid
+  retrieval, deterministic tool layer, RCA chain, distributional grounding,
+  multivariate anomaly, change ledger, standardized defect-mode taxonomy,
+  work order structured-and-narrative ingestion, feedback + correction +
+  outcome linkage, role-based presentation, full audit trail.</p>
+</li>
+<li>
+<p><strong>Phase 3 (partial):</strong> Some Phase-3 items shipped early (multivariate
+  anomaly was implemented as B7 within the MVP because it required no
+  labels). Remaining Phase 3: memory curation UI, AI-suggested memory
+  candidates, distribution-shape SVG visualizations in the chat UI, and the
+  challenge-flow UI.</p>
+</li>
+<li>
+<p><strong>Phase 4:</strong> Supervised classifiers (delam, failure-mode prediction)
+  trained on outcome-validated event labels with SHAP explanations; vision
+  models on high-value camera angles; enterprise scaling via the UNS.
+  All <span class="status-considering">CONSIDERING</span> — not started.</p>
+</li>
+</ul>
+<div class="delta-box">
+<p class="delta-title">Δ vs v2.0 — Executive summary</p>
+<p><span class="label">Stayed:</span> Doctrine intact: read-only,
+grounding-first, every claim cited, refusal narrowed to scope.</p>
+<p><span class="label">Changed:</span> Capabilities list expanded with
+five additions that were not in v2.0 — hybrid retrieval, tool layer,
+RCA chain, distributional grounding, change ledger. All are deterministic
+and bounded; none introduce model-side learning.</p>
+<p><span class="label">Considering:</span> Cross-encoder reranker (B2),
+HyDE (B5), self-consistency / k-sample voting (B6), and explicit active
+learning trainer (B11) remain on the table for after a shift of
+production traffic clarifies what the bottleneck actually is.</p>
+</div>
+</section>
+
+<section class="chapter" id="02-design-philosophy">
+<h1 id="2-problem-statement-design-philosophy">2. Problem Statement &amp; Design Philosophy</h1>
+<h2 id="21-the-trust-problem">2.1 The Trust Problem</h2>
+<p>Industrial environments operate on verified, auditable information. Every
+decision made on the plant floor — whether to slow a line, replace a
+bearing, reject a roll — is made against a backdrop of measured data and
+documented procedure. An AI advisor that fabricates tag values, invents
+maintenance records, or confidently asserts unsupported conclusions is not
+merely unhelpful. It is an operational liability. An operator who catches
+the advisor in a single confident fabrication will stop trusting it for
+every subsequent interaction, and that loss is both immediate and durable.</p>
+<p>The engineering implication is stark: the cost of a hallucinated response
+is asymmetric and irrecoverable. A useful but imperfect response can be
+improved through iteration. A fabricated response, even once, poisons the
+operator's mental model of what the system is and what it can be trusted
+to do. Anti-hallucination is therefore not a quality-of-life enhancement
+to be refined over time. It is the load-bearing structural element of the
+MVP, and every subsequent design decision is made in service of it.</p>
+<p>This was the load-bearing claim in v2.0. It remains the load-bearing claim
+in v3.0. Nothing in the as-built implementation softened it; if anything,
+the addition of the deterministic tool layer (§7) and distributional
+grounding (§8) tightened the screw — the LLM is now constrained not just
+by what evidence retrieval pulls, but also by what numerical facts
+deterministic tools will and will not return when it asks for them.</p>
+<h2 id="22-the-grounding-first-doctrine">2.2 The Grounding-First Doctrine</h2>
+<p>The advisor does not write answers from its parametric knowledge. It
+assembles structured evidence from the plant's systems of record, constrains
+the LLM to reason only over that evidence, and enforces citation of every
+factual claim. The LLM is treated as a natural-language reasoning engine
+operating on a curated evidence package — not as a knowledge source in its
+own right. When the evidence package is insufficient to answer a question,
+the system refuses to guess and reports exactly what it was able to retrieve.</p>
+<p>This inverts the typical LLM chatbot architecture. In a conventional chat
+system, the model's priors are the primary substrate and retrieved evidence
+is a helpful augmentation. Here, the retrieved evidence is the substrate,
+and the model's priors are permitted to contribute only insofar as they help
+structure and communicate the evidence. The model's knowledge of latex
+chemistry, process control theory, or equipment nomenclature is useful for
+writing readable answers; its memory of any specific plant, coater, or
+product run is not trusted and is not permitted to leak into responses
+without a cited source.</p>
+<h3 id="grounding-first-in-the-as-built-implementation">Grounding-First in the As-Built Implementation</h3>
+<p>Three concrete implementation choices enforce the doctrine:</p>
+<ol>
+<li>
+<p><strong><code>CuratedContextPackage</code> is the only ingress.</strong> The Pydantic model uses
+   <code>extra="forbid"</code> so a gateway script that tries to slip raw historian
+   blobs into a side field is rejected at the request boundary. Plant data
+   reaches the LLM only through the contract.
+   <em>Source: <code>service/models/schemas.py::CuratedContextPackage</code> line ~150.</em></p>
+</li>
+<li>
+<p><strong>Section-delimited prompt with numbered citations.</strong> The user block is
+   assembled by <code>services/context_assembler.py</code> with explicit <code>=== TITLE ===</code>
+   delimiters. Excluded buckets are explicitly rendered as
+   <code>[NOT APPLICABLE — past-event query]</code> rather than omitted, so the model
+   cannot silently blend in current-state evidence on a retrospective
+   analysis.
+   <em>Source: <code>services/context_assembler.py::_na_section</code>.</em></p>
+</li>
+<li>
+<p><strong>Citation-free responses are downgraded.</strong> <code>services/response_parser.py</code>
+   parses the trailing <code>CONFIDENCE:</code> line and counts citations. If the
+   response makes claims but cites nothing, the parser appends a warning
+   and downgrades CONFIRMED → HYPOTHESIS automatically. The LLM cannot
+   smuggle ungrounded claims past the parser by skipping citation markers.
+   <em>Source: <code>services/rag.py::handle_chat</code> ~line 360.</em></p>
+</li>
+</ol>
+<h2 id="23-non-negotiable-design-principles">2.3 Non-Negotiable Design Principles</h2>
+<p>These are the principles v2.0 enumerated. The as-built implementation
+honors all six.</p>
+<h3 id="read-only">Read-only</h3>
+<p>The advisor never commands equipment, changes setpoints, or writes to
+process control tags. It is an advisory system, full stop. Every response
+that includes a recommended action is framed as a suggestion for a
+qualified operator to evaluate and execute, never as an automated change.</p>
+<p><em>Enforcement:</em> <code>services/anchor.py::is_control_command</code> regex catches verbs
+like <code>set</code>, <code>increase</code>, <code>lower</code>, <code>change</code>, <code>adjust</code>, <code>bypass</code>, <code>acknowledge</code>,
+<code>silence</code>, <code>shutdown</code>. Hits short-circuit to a <code>CONFIDENCE:
+INSUFFICIENT_EVIDENCE</code> refusal in <code>rag.py</code> Phase 1 before the LLM is even
+called. Tested in <code>test_anchor.py::test_control_commands_detected</code>.</p>
+<h3 id="every-factual-claim-is-cited">Every factual claim is cited</h3>
+<p>If the assistant states that a value is X, or that a document says Y, or
+that a condition was observed at time Z, that claim carries a numbered
+citation pointing to the exact source in the evidence package. Claims
+without citations are explicitly labeled as hypothesis.</p>
+<p><em>Enforcement:</em> the system prompt (<code>config/prompts/system_prompt_v2.txt</code>)
+mandates citation. The parser (<code>services/response_parser.py::has_any_citations</code>)
+flags responses with zero citation markers and downgrades the confidence
+label.</p>
+<h3 id="confidence-is-labeled">Confidence is labeled</h3>
+<p>Every conclusion in a response is tagged as confirmed fact, likely
+contributor, hypothesis, or insufficient evidence. The operator is never
+forced to guess at the advisor's epistemic state.</p>
+<p><em>Enforcement:</em> the system prompt emits a final <code>CONFIDENCE: &lt;label&gt;</code> line.
+<code>parse_confidence</code> extracts it; the four labels round-trip through
+<code>messages.confidence</code> (VARCHAR(20)) and surface back to the Perspective UI
+where they are color-coded green/amber/grey/red.</p>
+<h3 id="refusal-over-guessing">Refusal over guessing</h3>
+<p>If retrieval returns zero relevant documents, no rules fire, and no
+relevant memory exists, the system replies with an explicit
+insufficient-evidence message. It never papers over the gap with a
+plausible-sounding but unsupported answer.</p>
+<p><em>Enforcement:</em> <code>services/context_assembler.py::is_evidence_insufficient</code>
+inspects the assembled summary; if every bucket count is 0 and no rules
+matched, <code>rag.py</code> short-circuits to a templated insufficient-evidence
+response <strong>without calling the LLM at all</strong>. Tokens are saved; trust is
+preserved; the audit log records the short-circuit reason. Tested in
+<code>test_context_assembler.py::test_insufficient_when_all_buckets_empty</code>.</p>
+<h3 id="fully-reconstructible">Fully reconstructible</h3>
+<p>Every response is accompanied by a complete audit record containing the
+exact evidence used. Any answer can be re-opened months later and its
+reasoning traced end-to-end.</p>
+<p><em>Enforcement:</em> <code>messages.context_snapshot</code> JSONB column receives the
+parsed anchor, every populated bucket, every excluded bucket with reason,
+top-K chunk IDs with scores, work-order IDs, camera-clip handles, the
+full RCA trace when the chain ran, the prompt version, model name, and
+model parameters. <code>audit_log</code> mirrors a summary. Both tables are monthly
+partitioned via <code>pg_partman</code> (migration 001) so retention is operational
+rather than performance-dictated.</p>
+<h3 id="human-in-the-loop-for-durable-knowledge">Human-in-the-loop for durable knowledge</h3>
+<p>No user feedback signal, correction, or outcome observation automatically
+becomes part of the system's durable knowledge base. Every memory entry
+passes through a human engineering review.</p>
+<p><em>Enforcement:</em> <code>memory_candidates</code> is a staging table; promotion to
+<code>line_memory</code> requires an explicit engineer action. Bounded (±30%) chunk
+quality blending is the only feedback that affects retrieval scoring
+without an engineer in the loop, and it is bounded precisely so that no
+combination of feedback can flip ranking by more than 30%.</p>
+<h2 id="24-clean-separation-chat-context-vs-ml-features">2.4 Clean Separation: Chat Context vs ML Features</h2>
+<p>The MVP establishes a strict architectural boundary between the evidence
+assembled for the chat prompt and the feature vectors that will eventually
+be assembled for ML training. Both draw from the same underlying data
+sources, but they are structured differently, serve different consumers,
+and must never be confused.</p>
+<table>
+<thead>
+<tr>
+<th>Dimension</th>
+<th>Chat Grounding Context (RAG)</th>
+<th>ML Feature Engineering</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Purpose</td>
+<td>Give the LLM evidence to answer the current question</td>
+<td>Build tabular training data for offline model fitting</td>
+</tr>
+<tr>
+<td>Format</td>
+<td>Natural-language summaries, structured tables, chunks</td>
+<td>Numeric arrays, categorical encodings, fixed-schema rows</td>
+</tr>
+<tr>
+<td>Scope</td>
+<td>Current question + relevant recent context</td>
+<td>All historical events with outcome labels</td>
+</tr>
+<tr>
+<td>When built</td>
+<td>Real-time, per query</td>
+<td>Batch, offline</td>
+</tr>
+<tr>
+<td>Where used</td>
+<td>Prompt assembly → LLM</td>
+<td><code>feature_snapshots</code> table → scikit-learn / XGBoost</td>
+</tr>
+<tr>
+<td>Tags included</td>
+<td>Key tags (10–30), summarized stats, deviations</td>
+<td>All potentially predictive tags (50–200), raw aggregates</td>
+</tr>
+<tr>
+<td>Text included</td>
+<td>Retrieved document chunks (readable)</td>
+<td>Text-derived features (keyword counts, topic codes)</td>
+</tr>
+<tr>
+<td>Key constraint</td>
+<td>Readable and citable by LLM and operator</td>
+<td>Numeric / categorical, suitable for model input</td>
+</tr>
+</tbody>
+</table>
+<p>The ML feature engineering pipeline (Phase 4) will draw from the same event
+tables and historian data, but its outputs go into <code>feature_snapshots</code>, not
+into the chat prompt. When ML models are eventually active, their
+predictions — together with human-readable explanations — are added to the
+chat context as one more labeled evidence section. The feature vectors
+themselves are never shown raw to the LLM or to the operator.</p>
+<p>The <code>feature_snapshots</code>, <code>feature_definitions</code>, <code>ml_models</code>, and
+<code>ml_predictions</code> tables are scaffolded <strong>today</strong> so that when Phase 4
+arrives there is already structured, timestamped history to train against.
+This was the v2.0 promise; it is honored in <code>scripts/setup_database.sql</code>.
+The multivariate anomaly detector (§8) is the first consumer of
+<code>feature_snapshots</code> and proves the schema works under load.</p>
+<div class="delta-box">
+<p class="delta-title">Δ vs v2.0 — Design philosophy</p>
+<p><span class="label">Stayed:</span> Every doctrine and principle from v2.0
+survives unchanged. The grounding-first inversion (LLM as reasoner over a
+curated package, not a knowledge source) is the load-bearing claim and
+every shipped mechanism reinforces it.</p>
+<p><span class="label">Changed:</span> Nothing weakened. Two mechanisms
+strengthened the doctrine in implementation: (1) <code>extra="forbid"</code>
+on <code>CuratedContextPackage</code> rejects gateway-side ingress
+attempts; (2) parser auto-downgrade-on-no-citation closes a hole the v2.0
+prose left open.</p>
+<p><span class="label">Considering:</span> Per-claim citation enforcement
+(today: per-response). A future revision could parse out individual claims
+and require each to carry a citation; this is bounded by parser ambiguity
+on multi-clause sentences.</p>
+</div>
+</section>
+
+<section class="chapter" id="03-system-architecture">
+<h1 id="3-system-architecture">3. System Architecture</h1>
+<h2 id="31-component-overview">3.1 Component Overview</h2>
+<p>The system is composed of five first-class components and four supporting
+services. Each component has a narrow, well-defined responsibility, and no
+component reaches across the boundaries of another.</p>
+<h3 id="first-class-components">First-class components</h3>
+<ul>
+<li>
+<p><strong>Ignition Perspective (front-end and context origination).</strong>
+  Operator-facing chat view, live tag dashboards, feedback UI, and
+  gateway-side Jython 2.7 scripts that read tags, query the historian,
+  evaluate alarms, and assemble the curated context package. Runs on the
+  existing Plant 4 Ignition gateway (<code>shawmfg04</code>).
+  Ships as: <code>ignition/scripts/{client,context,config,discovery,selector}.py</code>
+  plus <code>ignition/perspective/gateway_wiring.py</code> (specification +
+  copy-paste templates).</p>
+</li>
+<li>
+<p><strong>FastAPI service (orchestration and retrieval).</strong> Receives curated
+  context packages from the gateway, performs hybrid retrieval against the
+  document corpus, queries structured event tables, evaluates business
+  rules, dispatches the RCA chain when triggered, assembles the final
+  prompt, calls the LLM (with a tool-calling loop bounded by <code>max_iters</code>),
+  parses and validates the response, and writes the audit record.
+  Stateless apart from a per-process LLM concurrency semaphore, the RCA
+  step-1 cache, and the multivariate-anomaly fitted-model cache.
+  Horizontally scalable. Ships as: <code>service/main.py</code> mounting routers from
+  <code>service/routers/{chat,feedback,corrections,outcomes,health,select_tags}.py</code>.</p>
+</li>
+<li>
+<p><strong>PostgreSQL 16 + pgvector (unified data store).</strong> Single database for
+  documents, chunks, embeddings, events, conversations, feedback, memory,
+  user profiles, ML metadata, audit log, and tag registry. Vector search
+  via <code>pgvector</code> IVF-flat index on 384-dim embeddings; keyword search via
+  <code>pg_trgm</code> GIN index on chunk text; monthly partitioning of <code>messages</code> and
+  <code>audit_log</code> via <code>pg_partman</code>; closed enum of failure modes via FK to
+  <code>failure_modes</code>. Ships as: <code>scripts/setup_database.sql</code> (~700 lines DDL)</p>
+</li>
+<li>
+<p><code>scripts/migrations/{001..004}*.sql</code>.</p>
+</li>
+<li>
+<p><strong>Embedding model (retrieval backbone).</strong> <code>all-MiniLM-L6-v2</code>, 384-dim,
+  served locally via <code>sentence-transformers</code>. Loaded once at FastAPI
+  startup (<code>warmup_embeddings()</code> in <code>services/embeddings.py</code>); subsequent
+  embeds are CPU-bound and sub-50 ms per query. Chosen for small footprint,
+  acceptable retrieval quality on short technical text, and zero external
+  dependency.</p>
+</li>
+<li>
+<p><strong>LLM (reasoning engine).</strong> Pluggable provider (OpenAI, Azure OpenAI, or
+  any OpenAI-compatible HTTP server such as vLLM, llama.cpp, or LM Studio).
+  Selected by <code>LLM_PROVIDER</code> env-var. Model name, temperature, and
+  <code>max_tokens</code> are recorded on every response in <code>messages.model_name</code> and
+  <code>messages.model_params</code> for reproducibility. Concurrency is bounded
+  process-wide by an <code>asyncio.Semaphore(llm_max_concurrency)</code>.
+  Ships as: <code>services/llm.py::{OpenAIChatClient, AzureOpenAIChatClient,
+  LocalOpenAICompatibleClient}</code>.</p>
+</li>
+</ul>
+<h3 id="supporting-services">Supporting services</h3>
+<ul>
+<li>
+<p><strong>Rule engine.</strong> YAML-defined deterministic rules evaluated against the
+  curated context. Rule matches are fed into the prompt as a labeled
+  evidence section; they cannot directly cause an LLM response, but the
+  LLM must cite them if it invokes their conclusion. Ships as:
+  <code>services/rules.py</code> and <code>service/config/rules/coater1_rules.yaml</code>.</p>
+</li>
+<li>
+<p><strong>Tool layer (NEW vs v2.0).</strong> Five typed read-only tools the LLM can
+  invoke during a tool-enabled completion:
+  <code>percentile_of</code>, <code>compare_to_distribution</code>, <code>nearest_historical_runs</code>,
+  <code>detect_drift</code>, <code>defect_events_in_window</code>. Each tool is a pure function
+  over the existing DB; each return value carries a <code>SourceCitation</code> so
+  tool-derived facts inherit the same audit trail as retrieved evidence.
+  Ships as: <code>services/tools.py</code>. The OpenAI tool spec is generated from
+  the registry, so the LLM can never call a tool that doesn't exist.</p>
+</li>
+<li>
+<p><strong>Audit log (supporting).</strong> Append-only table receiving event records
+  from every meaningful system action: queries, feedback, corrections,
+  outcome linkages, memory state changes, model activations, ingestion
+  runs, and prompt version changes. Tamper-resistance is enforced by
+  database trigger (<code>audit_log_immutable()</code>) that raises on any
+  <code>UPDATE</code> or <code>DELETE</code>.</p>
+</li>
+<li>
+<p><strong>Nightly scheduler.</strong> A lightweight in-process loop in <code>service/main.py</code>
+  that, when enabled, runs work-order sync, Symphony backfill, and outcome
+  follow-up sweep + materialized-view refresh once per <code>nightly_jobs_interval_seconds</code>
+  (default 86400). Production deployments may swap this for APScheduler or
+  a dedicated worker; the in-process loop keeps the MVP single-container.</p>
+</li>
+</ul>
+<h2 id="32-high-level-data-flow">3.2 High-Level Data Flow</h2>
+<p>A single chat query traverses the path below. The orchestrator
+(<code>services/rag.py::handle_chat</code>) is structured into three phases with
+explicit DB-session lifetimes; the LLM call (Phase 2) does <strong>not</strong> hold an
+asyncpg pool slot, which matters under load because LLM responses average
+5–15 seconds.</p>
+<ol>
+<li>
+<p><strong>Operator submits query.</strong> Text is captured in the Perspective chat
+   component along with session metadata (Ignition <code>userName</code>, session id,
+   line id, signed gateway JWT). Posted to <code>POST /api/chat</code>.</p>
+</li>
+<li>
+<p><strong>Gateway-built curated context arrives in <code>live_context</code>.</strong> The
+   gateway script reads tier-1 tags always plus the subset selected by
+   <code>services/tag_selector.py</code> for query-relevant categories, computes
+   60-minute historian aggregates per tag, identifies deviations against
+   recent baselines, queries active alarms, reads recipe context (style,
+   recipe id, front step, crew, shift, target specs), and packages the
+   result into a structured JSON payload that conforms to
+   <code>CuratedContextPackage</code>.</p>
+</li>
+<li>
+<p><strong>Phase 1 — pre-LLM (own DB session).</strong>
+   - <code>_ensure_user_profile</code> upserts the user; <code>_get_or_create_conversation</code>
+     resolves the conversation id; the user message is persisted
+     immediately for audit-friendliness.
+   - Anchor resolved by <code>anchor.resolve_anchor</code> if the gateway didn't
+     already supply one (gateway can pre-resolve to avoid redundant work).
+   - <code>is_control_command</code> short-circuit: refuse and persist.
+   - <code>anchor.anchor_status != "resolved"</code> short-circuit: ask for clarification.
+   - <code>embed_one(req.query)</code> produces the 384-dim query vector.
+   - <strong>Hybrid retrieval</strong> runs <code>retrieve_chunks_hybrid</code> (vector + BM25 RRF</p>
+<ul>
+<li>boosted + MMR-diversified). Falls back to vector-only if
+ <code>retrieval_mode != "hybrid"</code>.</li>
+<li>Anchor-aware event retrieval: <code>retrieve_events_around_anchor</code> for
+ past-event queries; <code>retrieve_recent_events</code> for current-state.</li>
+<li>Failure-mode-matched history when <code>style_scope</code> AND
+ <code>failure_mode_scope</code> are both present.</li>
+<li>Work-order lookup scoped by <code>equipment_scope</code> and a 30-day window
+ before the anchor.</li>
+<li>Memory retrieval (vector cosine on <code>line_memory.embedding</code> filtered
+ to status in {approved, reviewed}); <code>mark_memories_accessed</code> updates
+ the <code>access_count</code> and <code>last_accessed</code>.</li>
+<li>Rule evaluation runs <code>evaluate_rules</code> against the curated context.</li>
+<li>Best-effort change ledger is built for past-event anchors
+ (<code>_maybe_build_change_ledger</code>); best-effort multivariate anomaly is
+ scored for current-state anchors (<code>_maybe_score_anomaly</code>).</li>
+<li><code>assemble_prompt</code> produces the structured user block + citation list +
+ summary + excluded-bucket list.</li>
+<li><code>is_evidence_insufficient</code> short-circuit: persist a templated
+ refusal <strong>without calling the LLM</strong> and return.</li>
+<li>Phase 1 commits and closes its DB session.</li>
+</ul>
+</li>
+<li>
+<p><strong>Phase 2 — LLM call (no DB session held).</strong>
+   - If <code>should_use_rca_chain(query, anchor)</code> returns True, dispatch
+     <code>services/rca.py::handle_rca</code> (two-step chain with bounded tool
+     budget); otherwise call <code>llm.complete(sys_prompt, user_block)</code>
+     one-shot.
+   - Response validated by <code>parse_confidence</code> and <code>has_any_citations</code>;
+     uncited responses are downgraded.
+   - <code>extract_cited_ids</code> filters the offered citation list down to the
+     subset the LLM actually cited.</p>
+</li>
+<li>
+<p><strong>Phase 3 — persist (new DB session).</strong>
+   - <code>_insert_message</code> writes the assistant row with the full
+     <code>context_snapshot</code> (parsed anchor, every populated bucket, every
+     excluded bucket with reason, retrieval scores, work-order ids,
+     camera-clip handles, all citations <em>offered</em>, RCA trace if any).
+   - <code>write_audit</code> appends a one-row <code>audit_log</code> summary.</p>
+</li>
+<li>
+<p><strong>Response rendered in Perspective</strong> with numbered source citations,
+   color-coded confidence labels, expandable source panel, feedback
+   controls, and (for diagnostic responses) a "Root cause confirmed?"
+   button that posts <code>signal_type=root_cause_confirmed</code> plus an
+   <code>outcome_linkages</code> row.</p>
+</li>
+</ol>
+<h2 id="33-deployment-topology">3.3 Deployment Topology</h2>
+<p>All components run on-premises within the Plant 4 network. The Ignition
+gateway runs on <code>shawmfg04</code> as it does today. The FastAPI service and
+PostgreSQL instance run as containers via <code>docker-compose</code> (see
+<code>docker-compose.yml</code>). The embedding model runs in-process with the
+FastAPI service to eliminate network latency for retrieval. LLM inference
+is the only external dependency in the MVP, routed through Shaw's
+approved API egress path.</p>
+<h3 id="docker-composeyml-services"><code>docker-compose.yml</code> services</h3>
+<ul>
+<li>
+<p><code>postgres</code> — <code>pgvector/pgvector:pg16</code> image. Healthcheck
+  <code>pg_isready</code>. Bind-mounts <code>setup_database.sql</code> and <code>seed_reference_data.sql</code>
+  into <code>/docker-entrypoint-initdb.d/</code> so first-time start populates the
+  schema and reference data automatically. Persistent named volume
+  <code>postgres_data:/var/lib/postgresql/data</code>.</p>
+</li>
+<li>
+<p><code>ai-service</code> — built from <code>service/Dockerfile</code>. Depends on <code>postgres</code>
+  with <code>condition: service_healthy</code>. Mounts <code>service/</code> for hot reload in
+  dev (remove the bind mount in production). Cached HuggingFace model
+  weights live in named volume <code>model_cache:/root/.cache/huggingface</code>.</p>
+</li>
+<li>
+<p>Healthcheck endpoint <code>GET /api/health</code> returns <code>{db, embedding_model,
+  llm_provider, version}</code> — exercised every 15s by docker-compose.</p>
+</li>
+</ul>
+<h3 id="network-security-boundary">Network &amp; security boundary</h3>
+<ul>
+<li>The advisor is <strong>read-only with respect to Ignition</strong>: reads tags via
+  <code>system.tag.readBlocking()</code> and queries the historian; never writes any
+  tag values or triggers any actions.</li>
+<li>All inter-component calls are internal to the Plant 4 network. The
+  FastAPI service is not exposed externally. The only egress is the LLM
+  API call.</li>
+<li>User identity is sourced from Ignition's authenticated session
+  (<code>session.props.auth.user.userName</code>) and signed into a short-lived
+  HMAC-SHA256 JWT by the gateway script (<code>ai.client</code>) using
+  <code>GATEWAY_HMAC_SECRET</code>. The service verifies the JWT and treats the
+  embedded <code>user_id</code> as the authoritative identity. Token TTL is bounded
+  to 120s by default (<code>GATEWAY_TOKEN_TTL_S</code> on the gateway,
+  <code>gateway_token_max_age_s</code> on the service).</li>
+<li>The audit log is append-only and tamper-resistant at the database layer
+  (trigger <code>audit_log_immutable</code>).</li>
+<li>LLM API calls include no PII beyond the user's role and display name.
+  Raw query text and evidence are sent because they are operationally
+  necessary; they are also logged locally in <code>messages.context_snapshot</code>
+  for audit.</li>
+<li>Camera clip handles are stored as Symphony URLs or persistent IDs, not
+  as embedded video data. Clips render in Perspective by fetching from
+  Symphony at view time; they are not copied into PostgreSQL and they are
+  not sent to the LLM. The LLM sees the handle as a citation reference only.</li>
+</ul>
+<h2 id="34-llm-hosting-options">3.4 LLM Hosting Options</h2>
+<p>Three viable LLM backends are wired up today in <code>services/llm.py</code>:</p>
+<ul>
+<li>
+<p><strong><code>openai</code></strong> (default). <code>AsyncOpenAI</code> client; reads <code>OPENAI_API_KEY</code>
+  and <code>OPENAI_MODEL</code>. Best instruction-following and citation discipline
+  available off the shelf. Per-query cost; external egress required.
+  Recommended for the MVP because the grounding-first doctrine depends
+  on tight instruction-following.</p>
+</li>
+<li>
+<p><strong><code>azure_openai</code></strong>. <code>AsyncAzureOpenAI</code> client; reads
+  <code>AZURE_OPENAI_ENDPOINT</code>, <code>AZURE_OPENAI_API_KEY</code>,
+  <code>AZURE_OPENAI_DEPLOYMENT</code>, <code>AZURE_OPENAI_API_VERSION</code>. Identical
+  contract; routed through the Shaw Azure tenant.</p>
+</li>
+<li>
+<p><strong><code>local</code></strong>. <code>LocalOpenAICompatibleClient</code> (also wraps <code>AsyncOpenAI</code>
+  with a custom <code>base_url</code>). Points at any OpenAI-compatible HTTP server
+  — vLLM, llama.cpp server, LM Studio, Databricks Foundation Model APIs,
+  or Databricks Model Serving. Reads <code>local_llm_endpoint</code>, <code>local_llm_model</code>,
+  <code>local_llm_api_key</code>. Data residency stays inside whatever infrastructure
+  hosts the endpoint.</p>
+</li>
+</ul>
+<p>Switching providers is a single environment-variable change. Tool-calling
+support is implemented identically across all three via a shared
+<code>_run_tool_loop</code> helper.</p>
+<p>The recommended evolution path documented in v2.0 (frontier API for MVP →
+Databricks-served open model after ~3 months / 5,000 logged queries) is
+preserved unchanged; the only difference in v3.0 is that the swap is now
+strictly a <code>LLM_PROVIDER=local</code> plus <code>local_llm_endpoint=...</code> change, no
+code modifications required.</p>
+<h2 id="35-observability-operational-surface">3.5 Observability &amp; Operational Surface</h2>
+<p>Two observability surfaces ship with v3.0:</p>
+<ul>
+<li>
+<p><strong>Prometheus metrics</strong> via <code>prometheus-fastapi-instrumentator</code> plus
+  custom counters/histograms in <code>services/metrics.py</code>:
+  <code>chat_in_flight</code>, <code>chat_total_seconds</code>, <code>chat_short_circuit_total{reason}</code>,
+  <code>chat_confidence_total{label}</code>, <code>retrieval_latency_seconds{stage}</code>,
+  <code>retrieval_mode_used{mode}</code>, <code>rca_chain_total{outcome}</code>, plus
+  <code>llm_token_usage_total{model,kind}</code>. Scrape via the default
+  <code>/metrics</code> endpoint exposed by the instrumentator.</p>
+</li>
+<li>
+<p><strong>Structured JSON logs</strong> via <code>structlog</code> configured in <code>main.py</code>. Every
+  log line is JSON with <code>iso_time</code>, <code>level</code>, <code>event</code>, plus event-specific
+  keys. Rotate via the standard container log driver.</p>
+</li>
+</ul>
+<p>A degraded-vs-down distinction is exposed via <code>/api/health</code>: degraded
+when DB or embedding model fails to load but the service is otherwise up.</p>
+<div class="delta-box">
+<p class="delta-title">Δ vs v2.0 — System architecture</p>
+<p><span class="label">Stayed:</span> Five first-class components plus
+rule engine and audit log; on-premises deployment topology; LLM as the
+only external dependency; read-only stance.</p>
+<p><span class="label">Changed:</span> Two extra supporting services
+(tool layer, nightly scheduler) shipped that v2.0 did not enumerate
+separately. Three LLM providers wired (OpenAI / Azure / OpenAI-compatible
+local) instead of one. Three-phase orchestration with explicit DB-session
+lifetime breaks (Phase 1 commits before LLM call) — v2.0 spoke of "one
+synchronous flow" without the lifecycle nuance. Prometheus + structlog
+observability shipped.</p>
+<p><span class="label">Considering:</span> Replace the in-process nightly
+scheduler with APScheduler or a dedicated worker container once we have
+more than three jobs. Add OpenTelemetry trace propagation from
+Perspective → FastAPI → DB so a single chat turn produces a single trace
+span.</p>
+</div>
+</section>
+
+<section class="chapter" id="04-anti-hallucination">
+<h1 id="4-anti-hallucination-mechanisms">4. Anti-Hallucination Mechanisms</h1>
+<p>The grounding-first doctrine is enforced by a pipeline of nine mechanisms
+working together. Each has a narrow job and none is sufficient on its own.
+Taken together, they define a response protocol in which the LLM can
+produce a useful engagement with the evidence, or flag specific claims as
+hypothesis, or refuse on genuine scope grounds — but cannot produce a
+confidently wrong answer without the system catching it.</p>
+<p>v2.0 enumerated seven mechanisms (anchor resolution, clarification-first
+default, anchor-conditional buckets, tag-class deviation, structured
+prompt, citation enforcement, refusal). v3.0 adds two: the <strong>deterministic
+tool layer</strong> (§4.10) and <strong>distributional grounding</strong> (§4.11). Both
+strengthen the substrate the LLM reasons over. Both are bounded: the LLM
+cannot invent a tool, and tool results carry their own citations.</p>
+<h2 id="41-query-anchor-resolution">4.1 Query Anchor Resolution</h2>
+<p>Before any evidence is assembled, the incoming query is parsed into a
+structured anchor object that determines what evidence is relevant. This
+step precedes retrieval, precedes context assembly, and is itself audited.
+Getting the anchor right is the single most important input to a grounded
+response — because most queries are implicitly about a specific moment in
+time, and assembling evidence for the wrong moment produces confidently
+wrong analysis no matter how good the downstream pipeline is.</p>
+<h3 id="three-query-classes">Three query classes</h3>
+<p>Every query resolves into one of three classes. The class determines which
+evidence buckets are relevant, and crucially, which are actively excluded.</p>
+<ul>
+<li>
+<p><strong>Past-event queries</strong> — the question references a specific past time,
+  run, event, or failure. Examples: "the off-quality from 3/13," "yesterday's
+  delam fail," "R-20260421-03," "QR-00417." Anchor time = the event time.
+  Current live tag state is explicitly excluded from context; it is noise
+  for a retrospective analysis.</p>
+</li>
+<li>
+<p><strong>Current-state queries</strong> — the question uses present-tense markers
+  referencing right now. Examples: "why are my tenter amps so high rn,"
+  "what's going on with zone 3 right now," "is puddle height drifting."
+  Anchor time = query time. Live tag state is the primary evidence; stale
+  event data is de-prioritized.</p>
+</li>
+<li>
+<p><strong>Pattern queries</strong> — the question asks about relationships, correlations,
+  or recurring behavior without a single time anchor. Examples: "do we
+  always see zone 3 overshoot after element replacement," "does humidity
+  correlate with delam on S-4471." Anchor time = none; historical aggregates
+  and matched-pattern retrieval are primary.</p>
+</li>
+</ul>
+<h3 id="parsing-signals-as-built">Parsing signals (as built)</h3>
+<p>The parser uses rule-based extraction; no ML classifier is required for
+the MVP. The actual regex set lives in <code>services/anchor.py</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>Regex / token set</th>
+<th>Maps to</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Run-number pattern</td>
+<td><code>\bR(?:UN)?-\d{6,8}-\d{1,3}\b</code></td>
+<td><code>past_event</code>, sets <code>anchor_run_id</code></td>
+</tr>
+<tr>
+<td>Sample / quality result</td>
+<td><code>\bQR-\d{4,6}\b</code></td>
+<td><code>past_event</code>, sets <code>anchor_event_id</code></td>
+</tr>
+<tr>
+<td>Numeric date (3/13, 2026-03-13, 03-13)</td>
+<td><code>_DATE_NUMERIC_RE</code></td>
+<td><code>past_event</code>, sets <code>anchor_time</code> to UTC midnight</td>
+</tr>
+<tr>
+<td>Relative date (yesterday, last shift, last week, this morning)</td>
+<td><code>_RELATIVE_DATE_RE</code></td>
+<td><code>past_event</code>, computed offset</td>
+</tr>
+<tr>
+<td>Present-tense markers (rn, right now, currently, "is the X", "are the Y")</td>
+<td><code>_PRESENT_TENSE_RE</code></td>
+<td><code>current_state</code></td>
+</tr>
+<tr>
+<td>Pattern markers (always, usually, do we ever, correlate with, trend, typically)</td>
+<td><code>_PATTERN_RE</code></td>
+<td><code>pattern</code></td>
+</tr>
+<tr>
+<td>Style code</td>
+<td><code>\bS-\d{3,5}\b</code></td>
+<td>sets <code>style_scope</code></td>
+</tr>
+<tr>
+<td>Failure-mode keyword (closed dictionary in <code>FAILURE_MODE_KEYWORDS</code>)</td>
+<td>substring match (longest-first)</td>
+<td>sets <code>failure_mode_scope</code></td>
+</tr>
+<tr>
+<td>Equipment keyword (closed dictionary in <code>EQUIPMENT_KEYWORDS</code>)</td>
+<td>substring match</td>
+<td>appends to <code>equipment_scope</code></td>
+</tr>
+<tr>
+<td>Control-action verb (set, increase, lower, change, adjust, bypass, ack, silence, shutdown, halt, …)</td>
+<td><code>CONTROL_VERBS_RE</code></td>
+<td>triggers refusal short-circuit before anchor is even returned</td>
+</tr>
+<tr>
+<td>None of the above</td>
+<td>—</td>
+<td><code>pattern</code> (default)</td>
+</tr>
+</tbody>
+</table>
+<p>The anchor object that flows downstream is the Pydantic
+<code>QueryAnchor</code> model (<code>models/schemas.py</code>). All fields are JSON-serializable
+and persisted in <code>messages.context_snapshot.parsed_anchor</code> so any past
+response can be re-opened with the exact anchor that drove it.</p>
+<h2 id="42-clarification-first-default">4.2 Clarification-First Default</h2>
+<p>If the parser cannot unambiguously resolve the anchor from the question
+alone, the system does not infer it. It asks. This is the hardest-enforced
+principle in the anti-hallucination layer: explicit reference or explicit
+clarification, never implicit inference.</p>
+<p>A human reading the conversation might reasonably conclude that "that
+scrap event" refers to the one mentioned three messages ago, or that
+"why did we scrap that roll?" means the most recent scrap. The system
+does not make that leap. Conversation history is a clarification aid — it
+pre-fills the clarification prompt with a proposed anchor — but does not
+skip the confirmation step. When the system produces an analysis, the
+operator must be able to trust that it was anchored on the event they
+meant.</p>
+<h3 id="three-clarification-patterns-encoded-as-anchorstatus">Three clarification patterns (encoded as <code>AnchorStatus</code>)</h3>
+<ul>
+<li><code>needs_clarification_enumerated</code> — small bounded candidate set; UI
+  renders tappable buttons for each option in
+  <code>QueryAnchor.clarification_options</code>.</li>
+<li><code>needs_clarification_open</code> — unbounded ambiguity; UI renders a free-text
+  prompt asking the operator to specify.</li>
+<li><code>needs_clarification_scoped</code> — no immediate match but adjacent candidates
+  exist; UI surfaces what was found and asks for confirmation.</li>
+</ul>
+<p>In all three cases, <code>rag.handle_chat</code> short-circuits Phase 1 with
+<code>confidence="insufficient_evidence"</code> and the prompt text becomes the
+assistant message. No LLM call. The operator's selected option becomes
+the resolved anchor for the actual analysis query.</p>
+<h3 id="scope-clarification-for-current-state-queries">Scope clarification for current-state queries</h3>
+<p>Current-state queries have an unambiguous temporal anchor (now), but
+scope can still be ambiguous. "Why is the line so slow?" is anchored on
+now, but the relevant scope might be "line speed right now," "throughput
+this shift," or "throughput this week." Same rule: ask, don't infer.</p>
+<p>The economics favor asking. A clarification prompt costs a few seconds
+of operator time. A wrong-anchor analysis costs the operator's time to
+read plus the trust damage of catching the system confidently anchored on
+the wrong event. Always-ask is the correct default even when asking
+feels over-cautious.</p>
+<h2 id="43-anchor-conditional-evidence-buckets">4.3 Anchor-Conditional Evidence Buckets</h2>
+<p>Once the anchor is resolved, the context builder assembles evidence. The
+buckets assembled are conditional on the anchor type. Buckets that would
+supply misleading evidence for the query type are excluded, <strong>not merely
+de-prioritized</strong> — they are not in the prompt at all, and the prompt
+explicitly renders <code>[NOT APPLICABLE — past-event query]</code> so the LLM
+cannot silently blend excluded evidence back in.</p>
+<h3 id="the-five-evidence-buckets">The five evidence buckets</h3>
+<table>
+<thead>
+<tr>
+<th>Bucket</th>
+<th>What it contains</th>
+<th style="text-align: center;">Past-event</th>
+<th style="text-align: center;">Current-state</th>
+<th style="text-align: center;">Pattern</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pre-anchor 60 min</td>
+<td>Tag behavior, alarms, deviations in the 60 min before anchor</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">—</td>
+</tr>
+<tr>
+<td>Pre-anchor 24 h</td>
+<td>Tag behavior, events, shift transitions in the 24 h before anchor</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">—</td>
+</tr>
+<tr>
+<td>14-day-prior normal baseline</td>
+<td>A reference 24 h window ~14 days before, same style running</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">—</td>
+</tr>
+<tr>
+<td>Last 4 runs prior</td>
+<td>Aggregate tag behavior for the four runs preceding the anchor run</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">—</td>
+</tr>
+<tr>
+<td>Failure-mode-matched history</td>
+<td>Every prior run matching (style, failure mode), unbounded in time</td>
+<td style="text-align: center;">✓ (primary)</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✓ (primary)</td>
+</tr>
+<tr>
+<td>Current tag values</td>
+<td>Live tag reads at query time</td>
+<td style="text-align: center;">✗ excluded</td>
+<td style="text-align: center;">✓ (primary)</td>
+<td style="text-align: center;">—</td>
+</tr>
+<tr>
+<td>Live alarms</td>
+<td>Currently active alarms</td>
+<td style="text-align: center;">✗ excluded</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">—</td>
+</tr>
+</tbody>
+</table>
+<p>The <strong>failure-mode-matched history bucket</strong> is the most important addition
+over a naive RAG design, and it is the dominant grounding signal for most
+failure-analysis queries. When an operator asks about a specific delam
+event on S-4471, the system doesn't just retrieve the current event — it
+pulls every prior S-4471 delam event from <code>defect_events</code> joined to
+<code>production_runs</code> (matched on <code>product_style</code> and <code>failure_mode</code>),
+assembles their pre-event tag behavior, and places them alongside the
+current event for side-by-side comparison. "Three of the four prior S-4471
+off-tenter events showed identical zone 3 overshoot in the hour before
+failure" is a qualitatively different answer than "zone 3 looks elevated."</p>
+<h3 id="the-exclusion-record">The exclusion record</h3>
+<p>Every excluded bucket is recorded in the
+<code>AssembledPrompt.excluded_buckets: list[BucketExclusion]</code> field with a
+<code>reason</code> string. The list is persisted into <code>messages.context_snapshot.excluded_buckets</code>
+so an audit can confirm not just what evidence was used, but what evidence
+was deliberately withheld and why.</p>
+<h2 id="44-tag-discovery-and-classification">4.4 Tag Discovery and Classification</h2>
+<p>The system does not maintain a hand-curated list of every tag on Coater 1.
+At least, that was the v2.0 design. In the as-built MVP, tag discovery is
+<strong>partially deferred</strong>: the schema (<code>tag_registry</code> table) is fully
+provisioned, but the gateway-side enumeration runs against a hardcoded
+<code>KEY_TAGS</code> list in <code>ignition/scripts/config.py</code> (~50 tags hand-tagged with
+category and keywords). The pre-screen <code>services/tag_selector.py</code> walks
+that catalog and returns a query-conditional subset.</p>
+<p>This is documented in detail in §15 (<em>Tag Selection &amp; Gateway
+Integration</em>), including the path forward to wire <code>ItemInstance</code> SQL
+discovery into <code>tag_registry</code>.</p>
+<p>The v2.0 four-class taxonomy
+(setpoint-tracking, oscillating-controlled, process-following,
+discrete-state) is implemented in <code>services/deviation.py</code> and applied per
+tag: setpoint-tracking tags get an absolute-deviation test; oscillating-
+controlled tags get a detrended-mean test plus amplitude-change check;
+process-following tags get a z-score against the conditional baseline;
+discrete-state tags get an unexpected-state-change test. Tested in
+<code>test_deviation.py</code>.</p>
+<h2 id="45-the-curated-context-package">4.5 The Curated Context Package</h2>
+<p>With the anchor resolved, the evidence buckets selected, and the tag
+catalog filtered, the context builder assembles the Curated Context
+Package. This is the structured Pydantic payload delivered to the prompt
+template. The LLM never sees raw historian data, raw tag scans, or
+unfiltered document content. It sees pre-digested evidence with clear
+delimiters between evidence types, scoped to the anchor.</p>
+<p>Two-tier tag selection is implemented in <code>services/tag_selector.py</code>:
+tier-1 (always-include) tags are flagged <code>core=True</code> in the catalog;
+tier-2 (query-routed) tags are pulled in when their category synonyms or
+their explicit keyword list matches the query text. A <code>_ZONE_RX</code> regex
+also recognizes "zone 3" / "zone3" / "z3" patterns and pulls only that
+zone's tags.</p>
+<h3 id="evidence-section-structure">Evidence section structure</h3>
+<p>For each evidence section included in the package, the renderer
+(<code>services/context_assembler.py</code>) produces text the LLM can reason over.
+For tag evidence specifically, every tag comes with distribution context,
+not just a scalar value:</p>
+<div class="code" style="background: #f8f8f8"><pre style="line-height: 125%;"><span></span><code>ZoneTemp3  current=435°F  target=420°F  class=setpoint_tracking
+  pre-anchor 60-min: mean 434, min 431, max 438, std 1.4
+  pre-anchor 24-h:   mean 429, min 421, max 438, std 3.1
+  baseline (14d prior, S-4471 running, 24h):
+                     mean 420, min 417, max 423, std 1.1
+  last 4 runs (S-4471, front_step=2):
+                     means [416, 418, 421, 419]   current X = 435
+                     box: [|----[416----421]----|]   X far right
+  failure-mode-matched (S-4471 off_tenter, 3 prior events):
+                     means [431, 438, 429]   current X = 435
+                     box: [|--[429----438]--|]   X inside box
+</code></pre></div>
+
+<p>The two small text-rendered box plots give the LLM (and the operator
+reading the cited source panel) immediate visual sense of whether the
+current value is a rare excursion or a match to a known failure pattern.
+Phase 3 will add actual rendered SVG box plots in the expandable source
+panel; the text form is shipped today and is sufficient for LLM
+reasoning.</p>
+<h3 id="the-complete-package-structure">The complete package structure</h3>
+<p>The sections present in the rendered prompt (always in this order when
+present):</p>
+<ul>
+<li>A. Parsed anchor (the resolved anchor object)</li>
+<li>B. Tier-1 tags (always-include with full evidence rendering)</li>
+<li>C. Tier-2 routed tags (query-relevant tags with full evidence rendering)</li>
+<li>D. Deviations flagged (tags whose class-appropriate deviation test fired)</li>
+<li>E. Active alarms (only for current-state queries)</li>
+<li>F. Recent events (scoped to the anchor window for past-event queries)</li>
+<li>G. Failure-mode-matched history (when a failure mode is named or implied)</li>
+<li>H. Retrieved text evidence (ranked document chunks, RRF-fused, MMR-diversified, weighted by <code>document_role</code>)</li>
+<li>I. Matched business rules (or "no rules matched")</li>
+<li>J. Approved line memory (filtered to status in {approved, reviewed})</li>
+<li>K. Attached camera clips (Symphony handles for events in scope)</li>
+<li>L. Change ledger (NEW vs v2.0 — what changed since baseline)</li>
+<li>M. Multivariate anomaly (NEW vs v2.0 — Mahalanobis flag for current-state queries)</li>
+<li>N. ML predictions (placeholder in MVP; populated Phase 4)</li>
+</ul>
+<h2 id="46-source-citations">4.6 Source Citations</h2>
+<p>Every factual claim in a response carries a numbered citation typed by
+provenance. Provenance types in v3.0 (<code>models/schemas.py::SourceCitation.type</code>):</p>
+<ul>
+<li><strong><code>LIVE_TAG</code></strong> — a current tag value read at query time (current-state queries only)</li>
+<li><strong><code>HISTORIAN_STAT</code></strong> — an aggregate computed from historian data over a named window</li>
+<li><strong><code>DEVIATION</code></strong> — a flagged deviation produced by the class-appropriate deviation test</li>
+<li><strong><code>BASELINE_COMPARE</code></strong> — a comparison of current behavior against a named baseline bucket</li>
+<li><strong><code>MATCHED_HISTORY</code></strong> — a prior run matched on style and failure mode</li>
+<li><strong><code>ALARM</code></strong> — an active or recent alarm record</li>
+<li><strong><code>EVENT</code></strong> — a structured event record (downtime, quality, defect)</li>
+<li><strong><code>WORK_ORDER</code></strong> — a work order record from the Ignition WO database</li>
+<li><strong><code>DOCUMENT</code></strong> — a retrieved document chunk</li>
+<li><strong><code>CAMERA_CLIP</code></strong> — a Symphony clip attached to an event in scope</li>
+<li><strong><code>RULE</code></strong> — a deterministic rule that matched current conditions</li>
+<li><strong><code>MEMORY</code></strong> — an approved line memory entry</li>
+<li><strong><code>ML_PREDICTION</code></strong> — a model output (Phase 4+)</li>
+<li><strong><code>DISTRIBUTION</code></strong> <em>(NEW)</em> — a percentile result from <code>services/percentiles.py</code></li>
+<li><strong><code>NEAREST_RUNS</code></strong> <em>(NEW)</em> — top-K historical runs near a given value</li>
+<li><strong><code>DRIFT</code></strong> <em>(NEW)</em> — Page-Hinkley CUSUM drift detection result</li>
+<li><strong><code>TOOL_RESULT</code></strong> <em>(NEW)</em> — a generic tool-call return value with auto-generated ID</li>
+</ul>
+<p>(v1 lowercase aliases — <code>live_tag</code>, <code>tag_summary</code>, <code>tag_deviation</code>,
+<code>active_alarm</code>, <code>document_chunk</code>, <code>downtime_event</code>, <code>quality_result</code>,
+<code>defect_event</code>, <code>business_rule</code>, <code>line_memory</code>, <code>ml_prediction</code> — are
+also accepted by the Pydantic <code>Literal</code> for backward compatibility with
+older audit records.)</p>
+<p>A response-parsing step validates that every factual claim has a
+citation. Uncited claims are appended with a <code>[NOTE: The assistant did
+not include source citations]</code> warning by <code>services/rag.py</code> and the
+overall confidence label is downgraded from <code>confirmed</code> to <code>hypothesis</code>.</p>
+<h2 id="47-confidence-labeling-and-engagement-posture">4.7 Confidence Labeling and Engagement Posture</h2>
+<p>Every conclusion in a response carries a confidence label. Labels describe
+certainty about specific claims; they do not gate whether the response
+happens at all. The advisor's default posture is full engagement with the
+evidence it can see, honestly labeled — not retreat into refusal.</p>
+<h3 id="the-four-confidence-labels">The four confidence labels</h3>
+<ul>
+<li><strong>CONFIRMED FACT</strong> — Directly stated in a source document or present in
+  a tag reading in scope. Example: "ZoneTemp3 averaged 435°F during
+  R-20260421-03 [2]."</li>
+<li><strong>LIKELY CONTRIBUTOR</strong> — Multiple pieces of evidence converge on a
+  conclusion. Example: "Three of the four prior S-4471 off-tenter events
+  showed identical zone 3 overshoot [5][6][7]; the current event shares
+  this signature."</li>
+<li><strong>HYPOTHESIS</strong> — Plausible but not well-supported by retrieved evidence.
+  Example: "Tillitson metering roller speed may also have contributed;
+  direct evidence was not retrieved for this run."</li>
+<li><strong>INSUFFICIENT EVIDENCE</strong> — Used narrowly for genuinely out-of-scope
+  queries; see §4.8.</li>
+</ul>
+<h3 id="engagement-posture">Engagement posture</h3>
+<p>The advisor reports the math, the abnormalities, the discrepancies, the
+matches and mismatches against baselines, the prior cases that look
+similar. It does not refuse to reason just because some channels are
+missing. When a meaningful evidence channel is unavailable — camera clips
+not yet attached, lab results not yet posted, upstream process data
+outside scope — the response flags it as context, not as grounds for
+refusal. That is useful and honest. It is the opposite of refusing to
+engage. The system prompt
+(<code>config/prompts/system_prompt_v2.txt</code> §5) enforces this posture
+explicitly.</p>
+<h3 id="visual-distinction-requirement">Visual distinction requirement</h3>
+<p>Because the default posture engages with mixed-confidence evidence, the
+confidence labels must be visually unmissable in the UI. The Perspective
+implementation uses all caps plus color coding: CONFIRMED FACT green,
+LIKELY CONTRIBUTOR amber, HYPOTHESIS grey, INSUFFICIENT EVIDENCE red. If
+the chat view rendered HYPOTHESIS text indistinguishable from CONFIRMED
+FACT text, the operator would lose the ability to calibrate trust and
+the whole labeling apparatus would become decorative. The visual
+distinction is non-negotiable.</p>
+<h2 id="48-refusal-narrowed-to-scope">4.8 Refusal: Narrowed to Scope</h2>
+<p>Refusal is for scope mismatch, not for uncertainty. The system refuses
+in exactly three cases:</p>
+<ul>
+<li>
+<p><strong>Genuinely out of corpus.</strong> The query is about equipment or processes
+  the system has no evidence for (e.g., a question about Coater 7 when
+  only Coater 1 is ingested). Response: "I don't have evidence for that
+  system in the current corpus."</p>
+</li>
+<li>
+<p><strong>Control command.</strong> The query asks the advisor to issue a control
+  action ("increase zone 3 to 430"). The advisor is read-only. It can
+  explain trade-offs of a hypothetical change but will never frame a
+  recommendation as an instruction to execute. Implementation:
+  <code>services/anchor.py::is_control_command</code> returns True; <code>rag.py</code>
+  short-circuits in Phase 1.</p>
+</li>
+<li>
+<p><strong>No retrieval match at all.</strong> Zero relevant document chunks across
+  retrieval, no matching rules, no relevant memory, no events in scope.
+  The response is an explicit INSUFFICIENT EVIDENCE summary listing
+  what was searched. Implementation:
+  <code>services/context_assembler.py::is_evidence_insufficient</code> returns True;
+  <code>rag.py</code> short-circuits <strong>without calling the LLM</strong>.</p>
+</li>
+</ul>
+<p>Uncertainty, partial information, and missing evidence channels do not
+trigger refusal. They trigger labeled engagement.</p>
+<h2 id="49-structured-prompt-architecture">4.9 Structured Prompt Architecture</h2>
+<p>The prompt delivered to the LLM has explicit section delimiters so the
+model can see what evidence is available and cite it by section and
+index. The structure is anchor-aware: sections that don't apply to the
+current query are omitted or explicitly marked as not-applicable so the
+LLM cannot silently blend excluded evidence back in.</p>
+<p>The system prompt is loaded from <code>service/config/prompts/system_prompt_v2.txt</code>
+(143 lines, plain text). It is registered into <code>prompt_versions</code> with
+<code>is_active=true</code>, and the version string is recorded in every
+<code>messages.prompt_version</code> row. Iterating the prompt is a v2 → v3 → v4
+migration in the same table; correlating feedback against prompt versions
+is a one-line SQL JOIN.</p>
+<p>Excerpt of the assembled user block (annotated):</p>
+<div class="code" style="background: #f8f8f8"><pre style="line-height: 125%;"><span></span><code>=== SYSTEM INSTRUCTIONS ===
+[role, safety constraints, response format, citation rules,
+ engagement posture, refusal triggers, label color scheme]
+
+=== PARSED ANCHOR ===
+anchor_type: past_event
+anchor_time: 2026-04-21T18:24:00-04:00
+anchor_event_id: QR-00417
+style_scope: S-4471
+failure_mode_scope: delam_hotpull
+
+=== TIER-1 TAGS (at anchor time) ===
+[IsRunning, LineSpeed, StyleID, FrontStep, …]
+
+=== TIER-2 ROUTED TAGS (with full evidence rendering) ===
+[ZoneTemp3 (setpoint_tracking), TillitsonMeterRPM (process_following), …]
+
+=== DEVIATIONS FLAGGED ===
+[class-appropriate deviation test results]
+
+=== LIVE ALARMS ===
+[NOT APPLICABLE — past-event query]
+
+=== RECENT EVENTS (scoped to anchor ± 72h) ===
+[structured summaries]
+
+=== FAILURE-MODE-MATCHED HISTORY ===
+[prior S-4471 delam_hotpull events with pre-event tag behavior]
+
+=== RETRIEVED DOCUMENTS (RRF-fused, MMR-diversified, weighted by document_role) ===
+[DOC-1] (rrf=0.087, weight=1.2) DELAM_0047: ...
+[DOC-2] (rrf=0.082, weight=1.0) WO-88214 narrative: ...
+[DOC-3] (rrf=0.079, weight=0.6) Roisum web-handling ref: ...
+
+=== CHANGE LEDGER ===
+TAG DELTAS vs. matched-history baseline (sigma-ranked):
+  ZoneTemp3 +3.4σ above baseline (current 435 vs mean 421, std 4.1)
+  TillitsonMeterRPM +1.8σ above baseline (current 33 vs mean 28, std 2.7)
+RECIPE DELTAS:
+  recipe_id differs from dominant matched-history (R102B, 6/8 prior runs)
+EQUIPMENT CHANGEOVERS in matched-history window:
+  zone3_heater (WO-88214 closed 2026-04-19): element replaced, calibration drift noted
+
+=== CAMERA CLIPS (attached to events in scope) ===
+[Symphony handles + timecodes, or &quot;no clips available&quot;]
+
+=== DETERMINISTIC RULES ===
+[matched rules, or &quot;no rules matched&quot;]
+
+=== APPROVED LINE MEMORY ===
+[approved memory entries matching query]
+
+=== MULTIVARIATE ANOMALY ===
+[NOT APPLICABLE — past-event query, no live snapshot]
+
+=== ML PREDICTIONS ===
+[placeholder in MVP]
+
+=== CONVERSATION HISTORY ===
+[recent turns in this session]
+
+=== USER QUESTION ===
+[the operator&#39;s actual question]
+</code></pre></div>
+
+<h2 id="410-deterministic-tool-layer-new-vs-v20">4.10 Deterministic Tool Layer (NEW vs v2.0)</h2>
+<p>The tool layer adds a second grounding mechanism: deterministic functions
+the LLM can call mid-completion to ground specific numerical hypotheses.
+Five tools are registered in <code>services/tools.py</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>What it does</th>
+<th>Citation type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>percentile_of</code></td>
+<td>Empirical CDF of <code>(tag, value)</code> within a configurable scope</td>
+<td><code>DISTRIBUTION</code></td>
+</tr>
+<tr>
+<td><code>compare_to_distribution</code></td>
+<td>Percentile + the K nearest historical runs labeled by outcome</td>
+<td><code>DISTRIBUTION</code></td>
+</tr>
+<tr>
+<td><code>nearest_historical_runs</code></td>
+<td>Top-K runs whose feature value is closest to a given value</td>
+<td><code>NEAREST_RUNS</code></td>
+</tr>
+<tr>
+<td><code>detect_drift</code></td>
+<td>Page-Hinkley CUSUM on a 90-day rolling daily mean</td>
+<td><code>DRIFT</code></td>
+</tr>
+<tr>
+<td><code>defect_events_in_window</code></td>
+<td>All defect events for a (line, time-window, optional style/mode)</td>
+<td><code>EVENT</code></td>
+</tr>
+</tbody>
+</table>
+<p>Each tool:</p>
+<ul>
+<li>Returns a <code>ToolResult(ok, data, citation, error)</code> — the citation is
+  auto-generated with a unique <code>id</code> so the LLM can cite it inline.</li>
+<li>Has a hard SQL timeout (5 s default) to bound latency.</li>
+<li>Is purely read-only — no tool ever writes to the DB.</li>
+<li>Is exposed via OpenAI's <code>tool_calls</code> mechanism through a shared
+  <code>_run_tool_loop</code> helper in <code>services/llm.py</code> that handles all three
+  provider implementations identically.</li>
+</ul>
+<p>Bounded budget: <code>rca_max_total_tool_calls=15</code>,
+<code>rca_max_evidence_per_hypothesis=5</code>, <code>rca_step1_max_iters=2</code>,
+<code>rca_step2_max_iters=2</code> (all in <code>settings.py</code>). The LLM cannot exhaust
+the API budget by tool-spamming.</p>
+<p>The OpenAI tool-spec is generated <strong>from</strong> the registry, not written by
+hand, so the LLM can never call a tool that doesn't exist. Allowlist
+filtering (<code>openai_tool_specs(allowlist=...)</code>) lets the RCA chain expose
+only the four distributional tools to step 1, hiding the (more expensive)
+<code>chunk_search</code> from cost-budgeted hypothesis generation.</p>
+<h2 id="411-distributional-grounding-new-vs-v20">4.11 Distributional Grounding (NEW vs v2.0)</h2>
+<p>The percentile service (<code>services/percentiles.py</code>) is the substrate
+behind the distributional tools. It computes empirical CDFs over
+<code>feature_snapshots</code> joined to <code>production_runs</code>, scoped by:</p>
+<ul>
+<li><code>global</code> — every snapshot for the line</li>
+<li><code>style</code> — same product style only</li>
+<li><code>style_step</code> — same style + same <code>front_step</code></li>
+<li><code>equipment</code> — same equipment id</li>
+<li><code>recipe</code> — same recipe id</li>
+<li><code>global_ytd</code> — same line, current year only</li>
+</ul>
+<p>Why scope matters: a <code>Front2_Temp</code> of 198 °C is "high" globally but
+"normal" for style S-1234 at front_step=2 in summer. Tying the percentile
+to context is the whole point.</p>
+<p>CDFs are cached in-process keyed on <code>(tag, scope_key)</code> with a TTL so the
+same query inside a single chat turn doesn't re-issue SQL. Drift
+detection uses the Page-Hinkley CUSUM test on a 90-day rolling daily mean,
+returning <code>DRIFT_DETECTED | NO_DRIFT | INSUFFICIENT_DATA</code> with the
+change-point timestamp when applicable.</p>
+<p>This layer is queried both directly (when a tool call is made) and
+indirectly (the change ledger and multivariate anomaly both consume it
+for their own grounding). All three sources surface the same numerical
+substrate to the LLM through different framings.</p>
+<h2 id="412-complete-audit-record">4.12 Complete Audit Record</h2>
+<p>Every response writes a full audit record to the <code>messages</code> table. The
+<code>context_snapshot</code> JSONB column is the durable, reconstructible record of
+exactly what the LLM saw. The snapshot includes:</p>
+<ul>
+<li>The parsed anchor object in full</li>
+<li>Any clarification prompt shown and the user's selection (when applicable)</li>
+<li>The exact tag values used (with read timestamps and tag class)</li>
+<li>The exact historian aggregates computed for each bucket, with window bounds and aggregation mode</li>
+<li>The failure-mode-matched runs included, with their run IDs</li>
+<li>Document chunk IDs retrieved with similarity scores, RRF scores, weights, and rank positions</li>
+<li>Memory entry IDs with their status and version at time of use</li>
+<li>Rules evaluated and which matched, with rule version</li>
+<li>Camera clip handles included</li>
+<li>Prompt version ID</li>
+<li>LLM model name and parameters</li>
+<li>Token counts and per-stage latency breakdown</li>
+<li>The full RCA trace (step 1 hypotheses, evidence gathered, step 2
+  adjudication, cache hit, total tool calls) when the chain ran</li>
+</ul>
+<p>Any response can be fully reconstructed and audited. If a user challenges
+"why did the system say X on 2026-04-15 at 14:35?" the audit record is
+the answer: the evidence the LLM had access to is the evidence visible
+in the snapshot, the anchor is explicit, and the RCA trace (when present)
+shows every hypothesis considered with its supporting evidence. There is
+no implicit state, no hidden prior, and no unrecorded reasoning step.</p>
+<p>The <code>audit_log</code> table mirrors a one-row summary and is append-only at
+the <strong>database</strong> layer (trigger <code>audit_log_immutable</code> raises on any
+<code>UPDATE</code> or <code>DELETE</code>). Tampering at the application layer is also
+impossible: <code>services/audit.py</code> only exposes a <code>write_audit</code> helper, no
+mutation API. Both <code>messages</code> and <code>audit_log</code> are monthly partitioned
+via <code>pg_partman</code> (migration 001) so old months can be detached for cold
+storage without VACUUM FULL on the parent.</p>
+<div class="delta-box">
+<p class="delta-title">Δ vs v2.0 — Anti-hallucination mechanisms</p>
+<p><span class="label">Stayed:</span> Seven mechanisms from v2.0 — anchor
+resolution, clarification-first, anchor-conditional buckets, tag-class
+deviation, structured prompt, citation enforcement, refusal — survive
+unchanged.</p>
+<p><span class="label">Changed:</span> Two new mechanisms shipped: the
+deterministic tool layer (§4.10) and distributional grounding (§4.11).
+Both add deterministic, bounded grounding to what was a
+retrieval-and-rules-only substrate. The change ledger and multivariate
+anomaly are added to the prompt structure (sections L and M).</p>
+<p><span class="label">Considering:</span> Per-claim citation
+enforcement (parser today validates per-response). Step-back query
+abstraction (B4). HyDE-style query expansion for cold-start retrieval (B5).
+Self-consistency / k-sample voting on high-stakes RCA conclusions (B6).</p>
+</div>
+</section>
+
+
+</body>
+</html>

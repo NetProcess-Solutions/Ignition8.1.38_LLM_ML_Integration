@@ -1,0 +1,94 @@
+# Sprint 1 / A7 — Anchor regression fixtures.
+#
+# Each entry:
+#   id:                      stable identifier; surfaced on test failure
+#   query:                   user query string
+#   now:                     ISO-8601 UTC; "_NOW" if omitted -> 2024-06-15T14:30:00Z
+#   expect:
+#     anchor_type:           past_event | current_state | pattern (optional)
+#     anchor_status:         resolved | needs_clarification_* | ambiguous (optional)
+#     anchor_run_id:         exact run id (optional)
+#     failure_mode_scope:    failure mode code (optional)
+#     style_scope:           S-NNNN (optional)
+#     equipment_scope:       equipment slug (optional)
+#     anchor_date:           YYYY-MM-DD; check anchor_time.date() == this (optional)
+#
+# Add new rows freely; tests are parametrized.
+- id: explicit_run_id
+  query: "Why did R-20240601-03 fail?"
+  expect:
+    anchor_type: past_event
+    anchor_status: resolved
+    anchor_run_id: R-20240601-03
+
+- id: yesterday_morning
+  query: "What happened yesterday morning?"
+  expect:
+    anchor_type: past_event
+    anchor_status: resolved
+    anchor_date: "2024-06-14"
+
+- id: present_tense_current_state
+  query: "Is the line running normally right now?"
+  expect:
+    anchor_type: current_state
+    anchor_status: resolved
+
+- id: pattern_with_style
+  query: "How often do we see delamination on style S-1234?"
+  expect:
+    anchor_type: pattern
+    style_scope: S-1234
+    failure_mode_scope: delam_hotpull
+
+- id: bare_keyword_needs_clarification
+  query: "delam"
+  expect:
+    anchor_status_in:
+      - needs_clarification_open
+      - needs_clarification_enumerated
+      - needs_clarification_scoped
+      - clarification_needed
+      - ambiguous
+
+- id: hotpull_keyword_resolves_failure_mode
+  query: "Why did the hot pull test fail this morning?"
+  expect:
+    anchor_type: past_event
+    failure_mode_scope: delam_hotpull
+
+- id: edge_fold_resolves
+  query: "We're seeing edge fold off the tenter on style S-9921 today"
+  expect:
+    failure_mode_scope: off_tenter_edge_fold
+    style_scope: S-9921
+
+- id: precoat_bubble_resolves
+  query: "Precoat bubble showing on the last roll"
+  expect:
+    failure_mode_scope: bubble_precoat
+
+- id: front_back_streak_resolves
+  query: "Front-back streak appearing in the last hour"
+  expect:
+    failure_mode_scope: streak_frontback
+
+- id: cw_out_of_spec_keyword
+  query: "Coating weight out of spec on Coater1"
+  expect:
+    failure_mode_scope: cw_out_of_spec
+
+- id: ozsy_synonym
+  query: "ozsy is reading low again"
+  expect:
+    failure_mode_scope: cw_out_of_spec
+
+- id: tenter_equipment_scope
+  query: "Anything wrong with the tenter right now?"
+  expect:
+    equipment_scope: tenter
+
+- id: oven_equipment_scope
+  query: "Oven zone 3 looks high — why?"
+  expect:
+    equipment_scope: oven

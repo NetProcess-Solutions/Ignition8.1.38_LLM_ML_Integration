@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }}</title>
+  <style>{{ inline_css | safe }}</style>
+</head>
+<body>
+
+<!-- =========================================================== -->
+<!-- COVER PAGE                                                   -->
+<!-- =========================================================== -->
+<section class="cover">
+  <div class="cover-rule"></div>
+  <h1 class="cover-eyebrow">COATER 1</h1>
+  <h1 class="cover-title">INTELLIGENT OPERATIONS ADVISOR</h1>
+  <div class="cover-rule"></div>
+  <p class="cover-sub">{{ subtitle }}</p>
+  <p class="cover-tagline">As-built reference for grounded conversational AI on a continuous latex carpet coating line</p>
+  <div class="cover-author">
+    <p class="cover-name">{{ author }}</p>
+    <p class="cover-role">Process Engineer, Finishing &amp; Coating</p>
+    <p class="cover-org">{{ org }}</p>
+    <p class="cover-date">Version 3.0 &middot; {{ date }} &middot; As-Built Reference</p>
+  </div>
+</section>
+
+<!-- =========================================================== -->
+<!-- TABLE OF CONTENTS                                            -->
+<!-- =========================================================== -->
+<section class="toc">
+  <h1>Contents</h1>
+  <ol class="toc-list">
+    {% for item in toc %}
+    <li><a href="#{{ item.id }}">{{ item.title }}</a></li>
+    {% endfor %}
+  </ol>
+</section>
+
+<!-- =========================================================== -->
+<!-- CHAPTERS                                                     -->
+<!-- =========================================================== -->
+{% for c in chapters %}
+<section class="chapter" id="{{ c.id }}">
+{{ c.html | safe }}
+</section>
+{% endfor %}
+
+</body>
+</html>

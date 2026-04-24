@@ -129,3 +129,34 @@ If `anchor_status` is `clarification_needed_*` the orchestrator
 short-circuited and asked for clarification. If `anchor_type` is
 `past_event` and the answer mentions a current tag value, that's a
 prompt regression — escalate.
+
+
+## Storage growth (Sprint 2 / A3)
+
+The 'messages' and 'audit_log' tables are monthly-partitioned via
+pg_partman after migration. Run once per environment:
+
+    psql -f scripts/migrations/001_partition_messages.sql
+
+Maintenance (daily, via pg_cron or external cron):
+
+    SELECT partman.run_maintenance(p_analyze := false);
+
+Retention is enforced by pg_partman:
+- audit_log: 24 months (configured in the migration script)
+- messages:  indefinite (training corpus)
+- feature_snapshots cache rows: see scripts/migrations/002_feature_snapshots_retention.sql
+
+### pgvector index migration
+
+Monitor with:
+
+    SELECT * FROM v_pgvector_index_status;
+
+When 'recommendation' is 'plan_migration' (>80k chunks), schedule a
+maintenance window. When >100k, perform the swap using the DDL embedded
+in scripts/migrations/003_pgvector_index_migration.sql. The new HNSW
+index is built CONCURRENTLY; readers stay online. Followups:
+- ANALYZE document_chunks
+- ALTER SYSTEM SET hnsw.ef_search = 40
+

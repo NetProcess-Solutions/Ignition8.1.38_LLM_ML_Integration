@@ -3,6 +3,7 @@
 # Jython 2.7 compatible.
 
 import system
+import time
 import ai.config as cfg
 
 _log = system.util.getLogger(cfg.LOGGER_NAME + ".client")
@@ -16,12 +17,54 @@ def _get_client():
     return _client
 
 
-def _post(path, payload):
+# -----------------------------------------------------------------------------
+# Per-user signed token (Sprint 1 / A4) - HMAC-SHA256 JWT.
+# -----------------------------------------------------------------------------
+def _b64url(byte_array):
+    """Base64-url encode raw bytes, no padding (Jython-safe)."""
+    from java.util import Base64
+    return Base64.getUrlEncoder().withoutPadding().encodeToString(byte_array)
+
+
+def _hmac_sha256(secret_str, message_str):
+    from javax.crypto import Mac
+    from javax.crypto.spec import SecretKeySpec
+    key = SecretKeySpec(secret_str.encode("utf-8"), "HmacSHA256")
+    mac = Mac.getInstance("HmacSHA256")
+    mac.init(key)
+    return mac.doFinal(message_str.encode("utf-8"))
+
+
+def signedToken(userId, sessionId=None):
+    """Build a short-lived HS256 JWT identifying (userId, sessionId, gateway)."""
+    now = int(time.time())
+    header  = {"alg": "HS256", "typ": "JWT"}
+    payload = {
+        "user_id":    userId,
+        "gateway_id": cfg.GATEWAY_ID,
+        "iat":        now,
+        "exp":        now + int(cfg.GATEWAY_TOKEN_TTL_S),
+    }
+    if sessionId:
+        payload["session_id"] = sessionId
+    h = _b64url(system.util.jsonEncode(header).encode("utf-8"))
+    p = _b64url(system.util.jsonEncode(payload).encode("utf-8"))
+    signing_input = h + "." + p
+    sig = _b64url(_hmac_sha256(cfg.GATEWAY_HMAC_SECRET, signing_input))
+    return signing_input + "." + sig
+
+
+def _post(path, payload, userId=None, sessionId=None):
     url = cfg.AI_SERVICE_URL.rstrip("/") + path
     headers = {
         "Content-Type": "application/json",
         "X-API-Key":    cfg.API_KEY,
     }
+    if userId:
+        try:
+            headers["Authorization"] = "Bearer " + signedToken(userId, sessionId)
+        except Exception as e:
+            _log.warn("Failed to mint user token: %s" % str(e))
     try:
         resp = _get_client().post(url, data=payload, headers=headers)
     except Exception as e:
@@ -50,9 +93,9 @@ def _post(path, payload):
         return {"ok": False, "status_code": resp.statusCode, "error": "bad json"}
 
 
-def postJson(path, payload):
+def postJson(path, payload, userId=None, sessionId=None):
     """Public wrapper around the internal _post helper."""
-    return _post(path, payload)
+    return _post(path, payload, userId=userId, sessionId=sessionId)
 
 
 def sendQuery(userMessage, sessionId, userId, lineId=None, conversationId=None,
@@ -95,7 +138,7 @@ def sendQuery(userMessage, sessionId, userId, lineId=None, conversationId=None,
     }
     if conversationId:
         payload["conversation_id"] = conversationId
-    return _post("/api/chat", payload)
+    return _post("/api/chat", payload, userId=userId, sessionId=sessionId)
 
 
 def sendFeedback(messageId, userId, signalType, signalValue, comment=None):
@@ -111,7 +154,7 @@ def sendFeedback(messageId, userId, signalType, signalValue, comment=None):
     }
     if comment:
         payload["comment"] = comment
-    return _post("/api/feedback", payload)
+    return _post("/api/feedback", payload, userId=userId)
 
 
 def sendCorrection(messageId, userId, correctionType, correctedClaim,
@@ -126,7 +169,7 @@ def sendCorrection(messageId, userId, correctionType, correctedClaim,
         payload["original_claim"] = originalClaim
     if supportingEvidence:
         payload["supporting_evidence"] = supportingEvidence
-    return _post("/api/corrections", payload)
+    return _post("/api/corrections", payload, userId=userId)
 
 
 def linkOutcome(messageId, outcomeType, outcomeId, outcomeTable, alignment,
@@ -141,7 +184,7 @@ def linkOutcome(messageId, outcomeType, outcomeId, outcomeTable, alignment,
     }
     if notes:
         payload["notes"] = notes
-    return _post("/api/outcomes", payload)
+    return _post("/api/outcomes", payload, userId=linkedBy)
 
 
 def confirmRootCause(messageId, userId, defectEventId, confirmed, notes=None):

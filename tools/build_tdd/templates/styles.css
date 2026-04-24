@@ -1,0 +1,257 @@
+/* ========================================================================
+   Coater 1 TDD v3.0 — print stylesheet
+   Matches the v2.0 visual identity:
+     red  #C8102E for H1/H2 + banner-row tables
+     navy #1F3A5F for H3/H4 + caption text
+     body Calibri/Helvetica 10.5pt with 1.4 line height
+   ======================================================================== */
+
+@page {
+  size: Letter;
+  margin: 0.85in 0.85in 1.0in 0.85in;
+  @bottom-center {
+    content: "Coater 1 Intelligent Operations Advisor  ·  Technical Design Document  ·  Page " counter(page) " of " counter(pages);
+    font-family: "Helvetica", "Arial", sans-serif;
+    font-size: 9pt;
+    color: #555;
+  }
+}
+
+@page :first {
+  margin: 0;
+  @bottom-center { content: ""; }
+}
+
+/* ----- typography ------------------------------------------------------ */
+html, body {
+  font-family: "Calibri", "Helvetica", "Arial", sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.4;
+  color: #1a1a1a;
+}
+
+h1 {
+  font-family: "Helvetica", "Arial", sans-serif;
+  color: #C8102E;
+  font-size: 22pt;
+  margin: 0 0 0.4em 0;
+  padding-bottom: 0.15em;
+  border-bottom: 2px solid #C8102E;
+  page-break-after: avoid;
+}
+h2 {
+  color: #C8102E;
+  font-size: 14pt;
+  margin: 1.4em 0 0.4em 0;
+  page-break-after: avoid;
+}
+h3 {
+  color: #1F3A5F;
+  font-size: 12pt;
+  margin: 1.1em 0 0.3em 0;
+  page-break-after: avoid;
+}
+h4 {
+  color: #1F3A5F;
+  font-size: 10.8pt;
+  margin: 0.9em 0 0.25em 0;
+  font-weight: bold;
+  page-break-after: avoid;
+}
+
+p { margin: 0.4em 0 0.5em 0; orphans: 3; widows: 3; }
+ul, ol { margin: 0.3em 0 0.6em 1.4em; padding: 0; }
+li { margin: 0.15em 0; }
+
+a { color: #1F3A5F; text-decoration: none; }
+a:visited { color: #1F3A5F; }
+
+strong { color: #1a1a1a; }
+em { color: #2a2a2a; }
+
+/* ----- code ------------------------------------------------------------ */
+code {
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  font-size: 9.2pt;
+  background: #f4f4f4;
+  padding: 0 3px;
+  border-radius: 2px;
+}
+pre {
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  font-size: 8.8pt;
+  background: #f4f4f4;
+  border-left: 3px solid #1F3A5F;
+  padding: 0.55em 0.7em;
+  margin: 0.5em 0 0.8em 0;
+  white-space: pre-wrap;
+  page-break-inside: avoid;
+  line-height: 1.3;
+}
+pre code { background: none; padding: 0; font-size: inherit; }
+
+/* ----- tables (banner-style red header rows) -------------------------- */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.55em 0 0.9em 0;
+  font-size: 9.5pt;
+  page-break-inside: avoid;
+}
+th {
+  background: #C8102E;
+  color: #fff;
+  text-align: left;
+  font-weight: bold;
+  padding: 5px 8px;
+  vertical-align: top;
+}
+td {
+  border: 1px solid #d8d8d8;
+  padding: 5px 8px;
+  vertical-align: top;
+}
+tr:nth-child(even) td { background: #f7f9fc; }
+
+/* ----- delta-vs-v2.0 callout ------------------------------------------ */
+.delta-box {
+  border: 1px solid #1F3A5F;
+  border-left: 5px solid #C8102E;
+  background: #f9fbff;
+  padding: 0.55em 0.85em;
+  margin: 0.9em 0 1.2em 0;
+  font-size: 9.8pt;
+  page-break-inside: avoid;
+}
+.delta-box .delta-title {
+  font-family: "Helvetica", "Arial", sans-serif;
+  color: #C8102E;
+  font-weight: bold;
+  font-size: 10.2pt;
+  letter-spacing: 0.5px;
+  margin: 0 0 0.35em 0;
+  text-transform: uppercase;
+}
+.delta-box p { margin: 0.2em 0; }
+.delta-box .label {
+  display: inline-block;
+  min-width: 6.5em;
+  font-weight: bold;
+  color: #1F3A5F;
+}
+
+/* ----- chapter pagination -------------------------------------------- */
+section.chapter {
+  page-break-before: always;
+}
+section.chapter > h1:first-child {
+  margin-top: 0;
+}
+
+/* ----- cover page ----------------------------------------------------- */
+section.cover {
+  page-break-after: always;
+  text-align: center;
+  padding-top: 2.0in;
+  height: 9.0in;
+}
+.cover-rule {
+  width: 4.5in;
+  height: 3px;
+  background: #C8102E;
+  margin: 0.5em auto;
+}
+.cover-eyebrow {
+  font-family: "Helvetica", "Arial", sans-serif;
+  color: #1F3A5F;
+  font-size: 30pt;
+  letter-spacing: 4px;
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+.cover-title {
+  font-family: "Helvetica", "Arial", sans-serif;
+  color: #C8102E;
+  font-size: 26pt;
+  letter-spacing: 2px;
+  border: none;
+  margin: 0.4em 0;
+  padding: 0;
+}
+.cover-sub {
+  font-style: italic;
+  font-size: 13pt;
+  color: #1F3A5F;
+  margin: 0.8em 0 0.3em 0;
+}
+.cover-tagline {
+  font-style: italic;
+  font-size: 10.5pt;
+  color: #555;
+  margin: 0 1in;
+}
+.cover-author { margin-top: 2.5in; }
+.cover-name { font-weight: bold; font-size: 14pt; color: #1F3A5F; margin: 0.2em 0; }
+.cover-role, .cover-org { color: #444; margin: 0.1em 0; }
+.cover-date { color: #555; font-style: italic; margin-top: 0.7em; }
+
+/* ----- TOC ----------------------------------------------------------- */
+section.toc {
+  page-break-after: always;
+}
+section.toc h1 {
+  font-size: 24pt;
+  border-bottom: 2px solid #C8102E;
+}
+ol.toc-list {
+  list-style: decimal;
+  margin-left: 1.5em;
+  font-size: 11pt;
+  line-height: 1.8;
+}
+ol.toc-list li a::after {
+  content: "  " leader(".") " " target-counter(attr(href), page);
+  color: #888;
+}
+
+/* ----- internal markdown TOC (per-chapter) --------------------------- */
+.toc {
+  background: #f9f9f9;
+  border-left: 3px solid #1F3A5F;
+  padding: 0.4em 0.8em;
+  font-size: 9.5pt;
+  margin: 0.4em 0 1em 0;
+}
+.toc ul { list-style: disc; margin: 0.2em 0 0.2em 1.4em; }
+
+/* ----- captions / figure notes --------------------------------------- */
+.caption, em.caption, p.caption {
+  display: block;
+  font-style: italic;
+  color: #555;
+  font-size: 9.4pt;
+  margin: -0.3em 0 0.6em 0;
+}
+
+/* ----- highlights / status pills ------------------------------------- */
+.status-shipped, .status-deferred, .status-stub, .status-considering {
+  display: inline-block;
+  font-family: "Helvetica", "Arial", sans-serif;
+  font-size: 8.6pt;
+  font-weight: bold;
+  letter-spacing: 0.4px;
+  padding: 1px 7px;
+  border-radius: 8px;
+  margin-right: 4px;
+  vertical-align: 1px;
+}
+.status-shipped     { background: #1F7A1F; color: #fff; }
+.status-deferred    { background: #777;     color: #fff; }
+.status-stub        { background: #B07A00;  color: #fff; }
+.status-considering { background: #1F3A5F;  color: #fff; }
+
+/* ----- key/value definition lists ------------------------------------ */
+dl { margin: 0.4em 0; }
+dt { font-weight: bold; color: #1F3A5F; margin-top: 0.4em; }
+dd { margin: 0 0 0.3em 1.2em; }

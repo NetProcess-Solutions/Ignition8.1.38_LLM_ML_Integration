@@ -1,17 +1,22 @@
 """POST /api/outcomes - link real-world outcomes to earlier assistant messages."""
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_session
 from models.schemas import OutcomeLinkRequest, OutcomeLinkResponse
-from routers.deps import require_api_key
+from routers.deps import require_api_key, require_attributed_user
 from services.audit import write_audit
+from services.outcome_closure import (
+    compute_precision_per_failure_mode,
+    find_pending_followups,
+)
 
 router = APIRouter(prefix="/outcomes", tags=["outcomes"],
-                   dependencies=[Depends(require_api_key)])
+                   dependencies=[Depends(require_api_key),
+                                 Depends(require_attributed_user)])
 
 
 @router.post("", response_model=OutcomeLinkResponse)
@@ -81,3 +86,28 @@ async def link_outcome(
     )
 
     return OutcomeLinkResponse(linkage_id=linkage_id, accepted=True)
+
+
+# Sprint 6 / B10 — outcome closure read endpoints.
+@router.get("/pending_followups")
+async def pending_followups(
+    line_id: str | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=1000),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Past-event chat answers older than `outcome_followup_hours` with no linkage."""
+    rows = await find_pending_followups(session, line_id=line_id, limit=limit)
+    return {"count": len(rows), "items": [r.__dict__ for r in rows]}
+
+
+@router.get("/precision")
+async def precision_by_failure_mode(
+    line_id: str | None = Query(default=None),
+    days: int = Query(default=30, ge=1, le=365),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Confirmed-vs-rejected outcome-linkage precision per failure mode."""
+    rows = await compute_precision_per_failure_mode(
+        session, line_id=line_id, days=days,
+    )
+    return {"count": len(rows), "items": [r.__dict__ for r in rows]}

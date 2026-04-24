@@ -9,6 +9,17 @@
 AI_SERVICE_URL = "http://localhost:8000"
 API_KEY        = "change_me_to_match_service_env"
 
+# -----------------------------------------------------------------------------
+# Per-user attribution (Sprint 1 / A4)
+# -----------------------------------------------------------------------------
+# Shared HMAC secret used to sign per-user JWTs sent on every request.
+# MUST match service GATEWAY_HMAC_SECRET. Keep this on a gateway-scoped
+# project property (NOT in source control) in production.
+GATEWAY_HMAC_SECRET = "change_me_must_match_service"
+GATEWAY_ID          = "coater1-gw"
+# Maximum lifetime (seconds) of a signed token. Service rejects anything longer.
+GATEWAY_TOKEN_TTL_S = 120
+
 # Base URL of the Ignition gateway itself (informational).
 IGNITION_BASE_URL = "http://172.31.64.235:8088"
 

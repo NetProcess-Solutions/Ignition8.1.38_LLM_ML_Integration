@@ -7,27 +7,46 @@
 
 import math
 import system
-from java.util import Date
+from java.util import Date, TimeZone
 
 import ai.config as cfg
 
 _log = system.util.getLogger(cfg.LOGGER_NAME + ".context")
 
+# Sprint 1 / A1 — ISO timestamps must be UTC. Cache the formatter timezone
+# once so we don't re-resolve on every call.
+_UTC_TZ = TimeZone.getTimeZone("UTC")
+_ISO_PATTERN = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+
 
 def _iso(dt):
-    """Convert a java.util.Date or Python datetime to ISO-8601 UTC string."""
+    """Convert a java.util.Date or Python datetime to an ISO-8601 UTC string.
+
+    Always emits UTC, regardless of the gateway's local timezone. Stamping
+    a local-time value with the 'Z' suffix is a silent correctness bug we
+    explicitly defend against here.
+    """
     if dt is None:
         return None
     try:
-        # Ignition values usually come back as java.util.Date
         if isinstance(dt, Date):
-            millis = dt.getTime()
-            return system.date.format(
-                system.date.fromMillis(millis), "yyyy-MM-dd'T'HH:mm:ss'Z'"
-            )
-        return system.date.format(dt, "yyyy-MM-dd'T'HH:mm:ss'Z'")
+            return system.date.format(dt, _ISO_PATTERN, _UTC_TZ)
+        return system.date.format(dt, _ISO_PATTERN, _UTC_TZ)
     except Exception:
         return str(dt)
+
+
+def log_timezone_self_check():
+    """Log gateway TZ + a sample formatted ISO string. Call once at startup
+    so timezone drift is visible in gateway logs."""
+    try:
+        gw_tz = TimeZone.getDefault().getID()
+        now = system.date.now()
+        _log.info(
+            "tz_self_check gateway_tz=%s sample_iso=%s" % (gw_tz, _iso(now))
+        )
+    except Exception as e:
+        _log.warn("tz_self_check failed: %s" % str(e))
 
 
 def _safe_float(v):

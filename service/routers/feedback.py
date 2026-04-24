@@ -7,11 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_session
 from models.schemas import FeedbackRequest, FeedbackResponse
-from routers.deps import require_api_key
+from routers.deps import require_api_key, require_attributed_user
 from services.audit import write_audit
 
 router = APIRouter(prefix="/feedback", tags=["feedback"],
-                   dependencies=[Depends(require_api_key)])
+                   dependencies=[Depends(require_api_key),
+                                 Depends(require_attributed_user)])
 
 
 @router.post("", response_model=FeedbackResponse)

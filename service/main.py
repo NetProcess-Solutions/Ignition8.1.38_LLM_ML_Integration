@@ -47,6 +47,24 @@ async def _nightly_jobs_loop():
                     result = await backfill_since(session, since)
                 log.info("symphony_backfill_complete", **result)
                 ran_any = True
+            # Sprint 6 / B10 — outcome-followup notifier + analytic view refresh.
+            if getattr(s, "outcome_closure_enabled", True):
+                from services.outcome_closure import find_pending_followups
+                from sqlalchemy import text as _sql_text
+                async with SessionFactory() as session:
+                    pending = await find_pending_followups(session, limit=500)
+                    # Refresh the precision materialized view if it exists.
+                    try:
+                        await session.execute(
+                            _sql_text("REFRESH MATERIALIZED VIEW v_rca_precision_daily")
+                        )
+                        await session.commit()
+                    except Exception as e:
+                        await session.rollback()
+                        log.info("v_rca_precision_daily_refresh_skipped",
+                                 reason=str(e))
+                log.info("outcome_followups_pending", count=len(pending))
+                ran_any = True
             if not ran_any:
                 log.info("nightly_jobs_skipped",
                          reason="no integrations enabled")
@@ -61,6 +79,12 @@ async def _nightly_jobs_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     s = get_settings()
+    # Sprint 1 / A1 — refuse to start in production with unsafe defaults.
+    s.assert_production_ready()
+    if s.service_env != "production":
+        violations = s.collect_production_violations()
+        if violations:
+            log.warning("non_production_config_violations", violations=violations)
     log.info("startup", env=s.service_env, llm_provider=s.llm_provider)
     warmup_embeddings()
     log.info("embedding_model_loaded", model=s.embedding_model)
@@ -86,6 +110,22 @@ app = FastAPI(
     description="RAG-grounded line assistant for Ignition 8.1 (Coater 1).",
     version="0.1.0",
     lifespan=lifespan,
+)
+
+# Sprint 1 / A1 — install per-user rate limiter on /api/chat.
+from slowapi.errors import RateLimitExceeded  # noqa: E402
+
+from routers.rate_limit import limiter, rate_limit_exceeded_handler  # noqa: E402
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
+# Sprint 1 / A2 — Prometheus metrics.
+from prometheus_fastapi_instrumentator import Instrumentator  # noqa: E402
+import services.metrics  # noqa: F401, E402  -- registers custom collectors
+
+Instrumentator().instrument(app).expose(
+    app, endpoint="/metrics", include_in_schema=False, tags=["metrics"],
 )
 
 app.include_router(health.router,      prefix="/api")

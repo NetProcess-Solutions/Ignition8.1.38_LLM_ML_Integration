@@ -66,6 +66,10 @@ class RecipeContext(BaseModel):
     recipe_id: str | None = None
     front_step: int | None = None
     target_specs: dict[str, Any] = Field(default_factory=dict)
+    # Sprint 5 / B9 — used by the change-ledger crew-delta. Optional;
+    # gateways that don't populate them lose only that one delta.
+    crew: str | None = None
+    shift: str | None = None
 
 
 # -----------------------------------------------------------------------------
@@ -237,6 +241,8 @@ class SourceCitation(BaseModel):
         "LIVE_TAG", "HISTORIAN_STAT", "DEVIATION", "BASELINE_COMPARE",
         "MATCHED_HISTORY", "ALARM", "EVENT", "WORK_ORDER",
         "DOCUMENT", "CAMERA_CLIP", "RULE", "MEMORY", "ML_PREDICTION",
+        # B0 — distributional grounding & tool layer
+        "DISTRIBUTION", "NEAREST_RUNS", "DRIFT", "TOOL_RESULT",
     ]
     title: str
     excerpt: str | None = None
@@ -254,6 +260,46 @@ class ChatResponse(BaseModel):
     processing_time_ms: int
     prompt_version: str
     model_name: str
+    # Sprint 4 / B8 — set when the RCA chain handled the query (else None).
+    rca_summary: dict[str, Any] | None = None
+
+
+# -----------------------------------------------------------------------------
+# Sprint 4 / B8 — RCA chain Pydantic models (LLM-side schema)
+# -----------------------------------------------------------------------------
+
+EvidenceRequestKind = Literal[
+    "percentile",
+    "compare_to_distribution",
+    "nearest_historical_runs",
+    "detect_drift",
+    "defect_events_in_window",
+    "chunk_search",
+]
+
+
+class EvidenceRequest(BaseModel):
+    """One closed-enum request that maps to a tool call."""
+    kind: EvidenceRequestKind
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    rationale: str = ""
+
+
+class RcaHypothesis(BaseModel):
+    cause_label: str
+    rationale_short: str
+    evidence_already_seen: list[str] = Field(default_factory=list)
+    evidence_to_gather: list[EvidenceRequest] = Field(default_factory=list)
+    prior_probability: float = 0.5
+
+
+class RcaTrace(BaseModel):
+    step1: dict[str, Any] = Field(default_factory=dict)
+    evidence_gathered: list[dict[str, Any]] = Field(default_factory=list)
+    step2: dict[str, Any] = Field(default_factory=dict)
+    cache_hit_step1: bool = False
+    total_llm_tokens: int = 0
+    total_tool_calls: int = 0
 
 
 # -----------------------------------------------------------------------------
