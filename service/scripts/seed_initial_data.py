@@ -48,42 +48,24 @@ PROMPTS_TO_SEED = [
     },
 ]
 
-INITIAL_MEMORIES = [
-    {
-        "category": "equipment_fact",
-        "content": (
-            "Coater 1 has 3 thermal zones. Zone 3 is the curing zone and is "
-            "the most thermally sensitive. The zone 3 heating element has a "
-            "history of calibration drift after replacement (typically settles "
-            "within 48 hours)."
-        ),
-        "tags": ["zone3", "heating", "calibration"],
-        "equipment_ids": ["coater1_zone3"],
-    },
-    {
-        "category": "process_fact",
-        "content": (
-            "Standard line speed range for Coater 1 is 200 to 250 fpm. "
-            "Speeds above 250 fpm increase risk of coating weight variation "
-            "and delamination on Style-A and Style-B products."
-        ),
-        "tags": ["line_speed", "delamination", "style_a", "style_b"],
-        "equipment_ids": ["coater1"],
-        "applies_to_products": ["Style-A", "Style-B"],
-    },
-    {
-        "category": "operating_tip",
-        "content": (
-            "When investigating a delamination event, always check: "
-            "(1) zone 3 temperature trace in the 30 minutes before the run, "
-            "(2) coating weight readings, "
-            "(3) any recipe changes within the last 4 hours, "
-            "(4) recent maintenance on coating heads or applicators."
-        ),
-        "tags": ["delamination", "troubleshooting", "checklist"],
-        "equipment_ids": ["coater1"],
-    },
-]
+# Initial line memories.
+#
+# Deliberately empty.
+#
+# The previous seed values ("3 thermal zones", "200-250 fpm standard",
+# "Style-A/Style-B", a generic delam checklist) were placeholder fiction
+# that did not reflect Coater 1 reality (15 oven zones, zones 2 and 3 are
+# the screwbar-drag concern, line-speed spec is per-style and lives in
+# UNS dataset tags, real style codes come from Ignition at query time).
+#
+# Seeding fabricated "facts" into line_memory turns hallucinations into
+# DB-blessed citations the chatbot will quote with a confidence label.
+# That is the worst class of error the system can produce.
+#
+# Real line memory enters via the operator -> feedback -> memory candidate
+# -> engineer approval flow (see services/feedback/ + line_memory.status).
+# Do NOT re-populate this list without engineer-verified content.
+INITIAL_MEMORIES: list[dict] = []
 
 
 async def seed_prompts(session) -> None:

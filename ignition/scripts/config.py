@@ -6,16 +6,24 @@
 # Service endpoint
 # -----------------------------------------------------------------------------
 # URL the Ignition gateway uses to reach the FastAPI AI service.
-AI_SERVICE_URL = "http://localhost:8000"
-API_KEY        = "change_me_to_match_service_env"
+# TODO: replace <HOST_IP_OF_AI_SERVER> with the static IP / DNS of the box
+# running the FastAPI container once the host VM is provisioned. Until then
+# the gateway will fail with a connection refused error — expected.
+AI_SERVICE_URL = "http://<HOST_IP_OF_AI_SERVER>:8000"
+
+# Shared secret. MUST match the API_KEY value in the service's .env file
+# byte-for-byte; one mismatched character = every request gets 401.
+API_KEY        = "2Y1Msytw0oz3iczoz8OSU7MxrtRDFPOv_DzhVKj4Py4"
 
 # -----------------------------------------------------------------------------
 # Per-user attribution (Sprint 1 / A4)
 # -----------------------------------------------------------------------------
-# Shared HMAC secret used to sign per-user JWTs sent on every request.
-# MUST match service GATEWAY_HMAC_SECRET. Keep this on a gateway-scoped
-# project property (NOT in source control) in production.
-GATEWAY_HMAC_SECRET = "change_me_must_match_service"
+# HMAC-SHA256 secret used to sign per-user JWTs sent on every request.
+# MUST match service GATEWAY_HMAC_SECRET in .env byte-for-byte.
+# Keep this on a gateway-scoped project property (NOT in source control)
+# in production — in source control here only because the repo itself is
+# private and the deployment hasn't been productionized yet.
+GATEWAY_HMAC_SECRET = "SJvUJAfzswkzTgcoFPBcls-ID253J5WH325xlv7iiko"
 GATEWAY_ID          = "coater1-gw"
 # Maximum lifetime (seconds) of a signed token. Service rejects anything longer.
 GATEWAY_TOKEN_TTL_S = 120
