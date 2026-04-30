@@ -18,3 +18,6 @@ WHERE
 
 COMMENT ON VIEW v_feature_snapshots_expired IS
     'Sprint 2 / A3.2 — rows eligible for retention sweep.';
+
+INSERT INTO schema_migrations (version) VALUES ('002_feature_snapshots_retention')
+    ON CONFLICT DO NOTHING;

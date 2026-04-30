@@ -169,7 +169,7 @@ async def _insert_message(
         text(
             """
             INSERT INTO messages (
-                id, conversation_id, role, content, sources, confidence,
+                id, conversation_id, role, content, sources, confidence_label,
                 context_snapshot, prompt_version, model_name, model_params,
                 token_usage, retrieval_scores, rules_matched, memories_used,
                 latency_ms, latency_breakdown
@@ -449,7 +449,7 @@ async def handle_chat(req: ChatRequest) -> ChatResponse:
             conversation_id=phase1.conversation_id,
             response=response_text,
             sources=used_sources,
-            confidence=confidence,
+            confidence_label=confidence,
             context_summary=assembled.summary,
             processing_time_ms=total_ms,
             prompt_version=effective_prompt_version,
@@ -558,7 +558,7 @@ async def _phase_pre_llm(
             short_circuit_response=ChatResponse(
                 message_id=msg_id, conversation_id=conversation_id,
                 response=response_text, sources=[],
-                confidence="insufficient_evidence",
+                confidence_label="insufficient_evidence",
                 context_summary={"short_circuit": 1, "reason_control_command": 1},
                 processing_time_ms=int((time.perf_counter() - t0) * 1000),
                 prompt_version="(short_circuit)", model_name="(none)",
@@ -585,7 +585,7 @@ async def _phase_pre_llm(
             short_circuit_response=ChatResponse(
                 message_id=msg_id, conversation_id=conversation_id,
                 response=response_text, sources=[],
-                confidence="insufficient_evidence",
+                confidence_label="insufficient_evidence",
                 context_summary={"clarification_required": 1},
                 processing_time_ms=int((time.perf_counter() - t0) * 1000),
                 prompt_version="(clarification)", model_name="(none)",
@@ -719,7 +719,7 @@ async def _phase_pre_llm(
                 conversation_id=conversation_id,
                 response=response_text,
                 sources=[],
-                confidence="insufficient_evidence",
+                confidence_label="insufficient_evidence",
                 context_summary=assembled.summary,
                 processing_time_ms=total_ms,
                 prompt_version=sys_prompt.version,

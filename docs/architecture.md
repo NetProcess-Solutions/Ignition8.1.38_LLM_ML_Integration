@@ -37,7 +37,7 @@ FastAPI service (Python 3.11)
          │  asyncpg
          ▼
 PostgreSQL 16 + pgvector
-└── 27 tables across 8 schema groups (see data_model.md)
+└── 30 tables across 9 schema groups (see data_model.md)
 ```
 
 ## Anti-hallucination mechanisms in this codebase

@@ -255,7 +255,7 @@ class ChatResponse(BaseModel):
     conversation_id: UUID
     response: str
     sources: list[SourceCitation]
-    confidence: Literal["confirmed", "likely", "hypothesis", "insufficient_evidence"]
+    confidence_label: Literal["confirmed", "likely", "hypothesis", "insufficient_evidence"]
     context_summary: dict[str, int]
     processing_time_ms: int
     prompt_version: str

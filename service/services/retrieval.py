@@ -488,7 +488,7 @@ async def retrieve_failure_mode_matched(
             r.run_number,
             r.product_style,
             r.front_step,
-            d.failure_mode,
+            d.fm_code AS failure_mode,
             d.detected_time,
             d.id          AS defect_id,
             d.description,
@@ -497,7 +497,7 @@ async def retrieve_failure_mode_matched(
         JOIN production_runs r ON r.id = d.run_id
         WHERE r.line_id = :line
           AND r.product_style = :style
-          AND d.failure_mode = :fm
+          AND d.fm_code = :fm
           AND (:before IS NULL OR d.detected_time < :before)
         ORDER BY d.detected_time DESC
         LIMIT :lim
@@ -524,7 +524,7 @@ async def retrieve_failure_mode_matched(
 
 
 # ===========================================================================
-# Sprint 3 / B1 — Hybrid retrieval (vector + keyword fused via RRF) +
+# Sprint 3 / B1 ï¿½ Hybrid retrieval (vector + keyword fused via RRF) +
 # failure-mode/equipment-conditional boost + MMR diversity.
 #
 # Drop-in replacement for `retrieve_chunks` driven by `settings.retrieval_mode`.

@@ -1,6 +1,6 @@
-# Data Model (v2.0)
+# Data Model (v3.0)
 
-29 tables across 9 schema groups, all created up front by
+30 tables across 9 schema groups, all created up front by
 [`scripts/setup_database.sql`](../scripts/setup_database.sql) so the schema
 contract is established on day one. Reference data (`failure_modes`,
 `user_permissions`) is seeded by

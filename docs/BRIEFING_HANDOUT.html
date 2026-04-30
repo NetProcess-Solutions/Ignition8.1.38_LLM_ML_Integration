@@ -1,0 +1,197 @@
+<!doctype html><html><head><meta charset='utf-8'><title>Briefing Handout</title><style>
+@page { size: Letter; margin: 0.6in 0.65in 0.7in 0.65in; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body {
+  font-family: 'Calibri', 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 10.5pt; line-height: 1.4; color: #1a1a1a; margin: 0;
+}
+h1 { font-size: 18pt; color: #14365c; margin: 0 0 6pt 0; border-bottom: 2pt solid #14365c; padding-bottom: 4pt; }
+h2 { font-size: 13pt; color: #14365c; margin: 14pt 0 4pt 0; border-bottom: 1pt solid #c8d3e0; padding-bottom: 2pt; }
+h3 { font-size: 11pt; color: #1f4a80; margin: 10pt 0 3pt 0; }
+p, li { margin: 3pt 0; }
+ul, ol { margin: 3pt 0 6pt 0; padding-left: 22pt; }
+code { font-family: 'Consolas', 'Courier New', monospace; font-size: 9.2pt;
+       background: #f3f4f6; padding: 0 3pt; border-radius: 2pt; }
+pre { font-family: 'Consolas', 'Courier New', monospace; font-size: 8.6pt;
+      line-height: 1.25; background: #f3f4f6; border: 1pt solid #d8dde3;
+      border-radius: 3pt; padding: 6pt 8pt; overflow-x: auto;
+      page-break-inside: avoid; white-space: pre; }
+blockquote { border-left: 3pt solid #14365c; background: #eef3fa;
+             margin: 6pt 0; padding: 4pt 10pt; color: #2a2a2a; }
+table { border-collapse: collapse; margin: 6pt 0; width: 100%;
+        page-break-inside: avoid; font-size: 9.5pt; }
+th, td { border: 1pt solid #c8d3e0; padding: 3pt 6pt; text-align: left;
+         vertical-align: top; }
+th { background: #14365c; color: #fff; font-weight: bold; }
+tr:nth-child(even) td { background: #f7f9fc; }
+hr { border: 0; border-top: 1pt solid #c8d3e0; margin: 10pt 0; }
+strong { color: #14365c; }
+a { color: #14365c; text-decoration: none; }
+</style></head><body><h1 id="coater-1-intelligent-operations-advisor-otit-briefing">Coater 1 Intelligent Operations Advisor — OT/IT Briefing</h1>
+<p><strong>One-page leave-behind.</strong> Use with the system boundary diagram.</p>
+<hr>
+<h2 id="what-this-is">What this is</h2>
+<p>A <strong>read-only, grounded operational decision-support system</strong> embedded in
+Ignition Perspective for Coater 1. It answers operator and engineer
+questions using live tag data, historian aggregates, alarms, recipe and
+shift context, SOPs, work orders, MOC packets, line memory, and
+deterministic process analytics. Every answer is cited, confidence-labeled,
+and fully auditable.</p>
+<blockquote>
+<p><strong>Framing:</strong> what we built is a <em>discovery methodology</em> — a working
+end-to-end prototype that answered what evidence the system needs, what
+guardrails it needs, and where the boundary belongs. We have OT ways of
+operationalizing this. <strong>We are asking IT for the approved ways to
+operationalize the data plane, the agentic harness, the model endpoint,
+and the tool layer so we can align.</strong></p>
+</blockquote>
+<hr>
+<h2 id="three-planes-not-two-zones">Three planes (not two zones)</h2>
+<pre><code>┌────────────────────┐    ┌──────────────────────────┐    ┌───────────────────────┐
+│  IGNITION (OT)     │    │  AGENTIC HARNESS (IT)    │    │  DATA PLANE (IT)      │
+│  read-only         │───►│  orchestration only      │◄──►│  enterprise standard  │
+│  - tags / history  │    │  - anchor parsing        │    │  - relational tables  │
+│  - alarms          │    │  - phase routing         │    │  - vector search      │
+│  - curated context │    │  - RCA chain control     │    │  - ML features        │
+│  - identity        │    │  - tool selection (RAG)  │    │  - audit / messages   │
+│  - ChatView        │    │  - response validation   │    │  - line memory        │
+└────────────────────┘    └────────┬─────────────────┘    └───────────────────────┘
+                                   │ calls
+                                   ▼
+                          ┌──────────────────────────┐    ┌───────────────────────┐
+                          │  MCP TOOL SERVERS        │    │  MODEL ENDPOINT       │
+                          │  deterministic functions │    │  governed, swappable  │
+                          │  - percentile_of         │    └───────────────────────┘
+                          │  - compare_distribution  │
+                          │  - detect_drift          │
+                          │  - nearest_runs          │
+                          │  - change_ledger         │
+                          │  - rules_eval            │
+                          │  - anomaly_check         │
+                          └──────────────────────────┘
+</code></pre>
+<p><strong>Two-flavor script split:</strong>
+1. <strong>Standard functions/methods</strong> → wrapped as <strong>MCP tool servers</strong>, hosted
+   centrally so other Shaw projects can reuse them.
+2. <strong>Orchestration / order of operations</strong> → <strong>agentic harness</strong>.</p>
+<hr>
+<h2 id="boundary-contract-non-negotiable">Boundary contract (non-negotiable)</h2>
+<ul>
+<li><strong>OT → Service:</strong> curated, schema-validated context package + query +
+  user/session/line ID. HTTPS, API key + per-user signed token, short TTL.</li>
+<li><strong>Service → OT:</strong> answer + cited sources + confidence label + message ID +
+  processing time. No prompt internals, no model name, no uncited content.</li>
+<li><strong>No reverse path.</strong> No PLC handle, no setpoint API, no alarm-ack API.
+  Structurally absent, not toggled off.</li>
+</ul>
+<hr>
+<h2 id="honesty-mechanisms">Honesty mechanisms</h2>
+<ul>
+<li>Curated context only — schema rejects unknown fields.</li>
+<li>Refusal-first — empty retrieval ⇒ no model call.</li>
+<li>Mandatory numbered citations; uncited claims stripped.</li>
+<li>Deterministic math (percentiles, drift, distributions) — model reasons
+  about numbers, can't invent them.</li>
+<li>Two-step RCA chain with hard tool-call budget.</li>
+<li>Confidence labels: CONFIRMED / LIKELY / HYPOTHESIS / INSUFFICIENT_EVIDENCE.</li>
+<li>Hash-chained, append-only audit enforced at the database layer.</li>
+<li>Self-grading: every "likely"/"confirmed" RCA graded against actual
+  outcome 24 h later. Daily precision view per failure mode.</li>
+<li>Operator feedback never auto-promotes; engineer-reviewed memory candidates.</li>
+</ul>
+<hr>
+<h2 id="capability-map-what-changes-per-shaw-stack-what-doesnt">Capability map — what changes per Shaw stack, what doesn't</h2>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Stays / changes</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Read-only plant context</td>
+<td><strong>Stays in Ignition</strong></td>
+<td>Native gateway APIs, Jython</td>
+</tr>
+<tr>
+<td>OT→service transport</td>
+<td>Same pattern</td>
+<td>HTTPS + key + signed token</td>
+</tr>
+<tr>
+<td>Agentic harness host</td>
+<td>Approved app host</td>
+<td>Databricks Apps / Azure App Svc / on-prem</td>
+</tr>
+<tr>
+<td>Deterministic tool layer</td>
+<td><strong>MCP server(s)</strong></td>
+<td>Centrally hosted, reusable</td>
+</tr>
+<tr>
+<td>Relational + vector + ML feature store</td>
+<td>Enterprise platform</td>
+<td>Likely <strong>Databricks</strong> (Delta + Vector)</td>
+</tr>
+<tr>
+<td>Embeddings</td>
+<td>Enterprise endpoint</td>
+<td>Databricks / Azure OpenAI</td>
+</tr>
+<tr>
+<td>LLM endpoint</td>
+<td>Provider-agnostic adapter</td>
+<td>Azure OpenAI / Databricks Serving / on-prem</td>
+</tr>
+<tr>
+<td>Identity / per-user attribution</td>
+<td>Enterprise SSO</td>
+<td>Entra ID / AD</td>
+</tr>
+<tr>
+<td>Secrets</td>
+<td>Enterprise vault</td>
+<td>Key Vault / CyberArk</td>
+</tr>
+<tr>
+<td>Audit</td>
+<td>Immutable + ship to SIEM</td>
+<td>DB-enforced + Splunk/Sentinel</td>
+</tr>
+<tr>
+<td>Scheduled jobs</td>
+<td>Approved scheduler</td>
+<td>Databricks Jobs / Functions / CronJobs</td>
+</tr>
+<tr>
+<td>Document ingestion</td>
+<td>Approved pipeline</td>
+<td>Connectors to SharePoint / WO database</td>
+</tr>
+<tr>
+<td>Network boundary</td>
+<td>Existing OT/IT segmentation</td>
+<td>Outbound-only HTTPS from OT</td>
+</tr>
+</tbody>
+</table>
+<p><strong>What does not change across stacks:</strong> the boundary, the three-phase
+request lifecycle, refusal-first behavior, citation enforcement,
+audit immutability.</p>
+<hr>
+<h2 id="what-we-are-deliberately-deferring">What we are deliberately deferring</h2>
+<ul>
+<li>Memory architecture (Mem0 / Letta methodology choices) — separate
+  conversation, not in tomorrow's ask.</li>
+<li>Symphony video integration — schema in place, adapter is a stub.</li>
+<li>Predictive ML models — architecturally provisioned, post-MVP.</li>
+</ul>
+<hr>
+<h2 id="the-ask-in-one-sentence">The ask, in one sentence</h2>
+<blockquote>
+<p>Tell us which Shaw-approved platform fulfills each capability above, and
+we will rebuild against it. The architecture is the contract; the
+implementations are negotiable.</p>
+</blockquote></body></html>

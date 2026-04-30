@@ -1,12 +1,28 @@
--- =============================================================================
--- IgnitionChatbot v2.0 schema
--- All 29 tables across 9 schema groups, created upfront per design §4.1.
+﻿-- =============================================================================
+-- IgnitionChatbot v3.0 schema -- CANONICAL
+-- 30 tables across 9 schema groups per TDD v3.0 §5.1.
 -- Idempotent: safe to re-run; uses IF NOT EXISTS / DROP IF EXISTS guards.
+--
+-- Partitioning (messages, audit_log) is declared inline -- no migration
+-- surgery. The migration ledger table tracks applied DDL beyond this file.
+--
+-- pgvector NOTE: this script declares VECTOR(384) columns and ivfflat
+-- indexes. For local validation on hosts without pgvector installed, run
+-- via `service/scripts/apply_local.py` which strips those clauses.
 -- =============================================================================
 
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- =============================================================================
+-- Migration ledger
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version    TEXT        PRIMARY KEY,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+INSERT INTO schema_migrations (version) VALUES ('000_baseline_v3') ON CONFLICT DO NOTHING;
 
 -- =============================================================================
 -- Schema Group 1: Document Corpus
@@ -39,22 +55,35 @@ CREATE INDEX IF NOT EXISTS idx_documents_source_type   ON documents (source_type
 CREATE INDEX IF NOT EXISTS idx_documents_document_date ON documents (document_date DESC);
 CREATE INDEX IF NOT EXISTS idx_documents_role          ON documents (document_role);
 
+-- document_chunks: hybrid retrieval (vector + BM25 + filtered).
+-- bm25_tsv is a generated TSVECTOR column for the BM25 leg per TDD §5.1.
+-- failure_mode_codes / equipment_ids back the filtered-retrieval indexes.
 CREATE TABLE IF NOT EXISTS document_chunks (
-    id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    document_id  UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    chunk_index  INTEGER     NOT NULL,
-    chunk_text   TEXT        NOT NULL,
-    embedding    VECTOR(384),
-    token_count  INTEGER,
-    metadata     JSONB       NOT NULL DEFAULT '{}'::jsonb,
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    document_id         UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    chunk_index         INTEGER     NOT NULL,
+    chunk_text          TEXT        NOT NULL,
+    embedding           VECTOR(384),
+    bm25_tsv            TSVECTOR    GENERATED ALWAYS AS
+                            (to_tsvector('english', coalesce(chunk_text, ''))) STORED,
+    failure_mode_codes  TEXT[]      NOT NULL DEFAULT '{}',
+    equipment_ids       TEXT[]      NOT NULL DEFAULT '{}',
+    token_count         INTEGER,
+    metadata            JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (document_id, chunk_index)
 );
 CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON document_chunks (document_id);
-CREATE INDEX IF NOT EXISTS idx_chunks_embedding
+CREATE INDEX IF NOT EXISTS idx_chunks_embedding_ivfflat
     ON document_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 CREATE INDEX IF NOT EXISTS idx_chunks_text_trgm
     ON document_chunks USING gin (chunk_text gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_chunks_bm25_gin
+    ON document_chunks USING gin (bm25_tsv);
+CREATE INDEX IF NOT EXISTS idx_chunks_failure_mode_gin
+    ON document_chunks USING gin (failure_mode_codes);
+CREATE INDEX IF NOT EXISTS idx_chunks_equipment_gin
+    ON document_chunks USING gin (equipment_ids);
 
 CREATE TABLE IF NOT EXISTS ingestion_runs (
     id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -137,24 +166,24 @@ CREATE INDEX IF NOT EXISTS idx_quality_run         ON quality_results (run_id);
 CREATE INDEX IF NOT EXISTS idx_quality_sample      ON quality_results (sample_id);
 CREATE INDEX IF NOT EXISTS idx_quality_test_type   ON quality_results (test_type);
 
--- failure_mode is a closed enum maintained in failure_modes (Group 9 / seed
--- reference data). We enforce referential integrity via FK so the enum stays
--- closed; adding a new mode requires inserting into failure_modes first.
+-- failure_modes: closed enum, primary key is fm_code (TDD §5.3 naming).
 CREATE TABLE IF NOT EXISTS failure_modes (
-    code         VARCHAR(80) PRIMARY KEY,
+    fm_code      VARCHAR(80) PRIMARY KEY,
     label        VARCHAR(255) NOT NULL,
     defect_type  VARCHAR(50)  NOT NULL,
     description  TEXT,
     is_active    BOOLEAN      NOT NULL DEFAULT TRUE,
     created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
+COMMENT ON TABLE failure_modes IS
+    'Closed enum of coating-line failure modes per TDD §5.3. fm_code referenced by defect_events with RESTRICT.';
 
 CREATE TABLE IF NOT EXISTS defect_events (
     id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     line_id               VARCHAR(50) NOT NULL,
     run_id                UUID REFERENCES production_runs(id) ON DELETE SET NULL,
     defect_type           VARCHAR(50) NOT NULL,
-    failure_mode          VARCHAR(80) REFERENCES failure_modes(code) ON DELETE RESTRICT,
+    fm_code               VARCHAR(80) REFERENCES failure_modes(fm_code) ON DELETE RESTRICT,
     detected_time         TIMESTAMPTZ NOT NULL,
     detection_method      VARCHAR(50),
     severity              VARCHAR(20),
@@ -170,10 +199,10 @@ CREATE TABLE IF NOT EXISTS defect_events (
     created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_defect_line_time     ON defect_events (line_id, detected_time DESC);
-CREATE INDEX IF NOT EXISTS idx_defect_run           ON defect_events (run_id);
-CREATE INDEX IF NOT EXISTS idx_defect_failure_mode  ON defect_events (failure_mode);
-CREATE INDEX IF NOT EXISTS idx_defect_status        ON defect_events (status);
+CREATE INDEX IF NOT EXISTS idx_defect_line_time ON defect_events (line_id, detected_time DESC);
+CREATE INDEX IF NOT EXISTS idx_defect_run       ON defect_events (run_id);
+CREATE INDEX IF NOT EXISTS idx_defect_fm_code   ON defect_events (fm_code);
+CREATE INDEX IF NOT EXISTS idx_defect_status    ON defect_events (status);
 
 CREATE TABLE IF NOT EXISTS work_orders (
     id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -271,17 +300,21 @@ CREATE TABLE IF NOT EXISTS conversations (
 CREATE INDEX IF NOT EXISTS idx_conv_session ON conversations (session_id);
 CREATE INDEX IF NOT EXISTS idx_conv_user    ON conversations (user_id, started_at DESC);
 
+-- messages: PARTITIONED BY RANGE(created_at) inline. PK is (id, created_at)
+-- because PG requires the partition key in every unique constraint on a
+-- partitioned table. Child tables FK to (id, created_at) -- see below.
+-- confidence_label uses the TDD §5.7 canonical column name with a
+-- 4-value CHECK enforcing the closed enum (TDD §4.7).
 CREATE TABLE IF NOT EXISTS messages (
-    id                 UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    conversation_id    UUID         NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    id                 UUID         NOT NULL DEFAULT uuid_generate_v4(),
+    conversation_id    UUID         NOT NULL,
     role               VARCHAR(20)  NOT NULL,
     content            TEXT         NOT NULL,
     sources            JSONB        NOT NULL DEFAULT '[]'::jsonb,
-    confidence         VARCHAR(20),
-    -- The full audit record. Per design §3.10 it includes the parsed anchor,
-    -- which buckets were populated AND which were explicitly excluded with
-    -- reason, retrieval scores, rules matched, memory ids, clip handles,
-    -- and prompt+model pinning.
+    confidence_label   VARCHAR(32)  CHECK (confidence_label IN
+                            ('confirmed','likely','hypothesis','insufficient_evidence')),
+    -- Full audit record per TDD §5.7: parsed_anchor, excluded_buckets,
+    -- retrieval scores, rules matched, memory ids, clip handles, prompt+model pinning.
     context_snapshot   JSONB        NOT NULL DEFAULT '{}'::jsonb,
     prompt_version     VARCHAR(50),
     model_name         VARCHAR(100),
@@ -292,27 +325,39 @@ CREATE TABLE IF NOT EXISTS messages (
     memories_used      JSONB        NOT NULL DEFAULT '[]'::jsonb,
     latency_ms         INTEGER,
     latency_breakdown  JSONB        NOT NULL DEFAULT '{}'::jsonb,
-    created_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-);
+    audit_hash         TEXT,         -- SHA-256(context_snapshot || body || citations) per TDD §5.7
+    created_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (id, created_at),
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+) PARTITION BY RANGE (created_at);
+
+-- Default partition catches anything outside the maintained range.
+-- pg_partman maintenance creates monthly partitions (handled in migration 001).
+CREATE TABLE IF NOT EXISTS messages_default PARTITION OF messages DEFAULT;
+
 CREATE INDEX IF NOT EXISTS idx_messages_conv    ON messages (conversation_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_role    ON messages (role);
 CREATE INDEX IF NOT EXISTS idx_messages_created ON messages (created_at DESC);
 
+-- Child tables that reference messages must include message_created_at
+-- so the FK can target the composite (id, created_at) PK.
 CREATE TABLE IF NOT EXISTS message_feedback (
-    id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    message_id   UUID         NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-    user_id      VARCHAR(255) REFERENCES user_profiles(id) ON DELETE SET NULL,
-    signal_type  VARCHAR(50)  NOT NULL,
-    signal_value VARCHAR(20)  NOT NULL,
-    comment      TEXT,
-    created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    message_id           UUID         NOT NULL,
+    message_created_at   TIMESTAMPTZ  NOT NULL,
+    user_id              VARCHAR(255) REFERENCES user_profiles(id) ON DELETE SET NULL,
+    signal_type          VARCHAR(50)  NOT NULL CHECK (signal_type IN (
+        'thumbs_up','thumbs_down','useful','not_useful',
+        'correct','incorrect','partially_correct',
+        'root_cause_confirmed','root_cause_rejected','root_cause_partial')),
+    signal_value         VARCHAR(20)  NOT NULL,
+    comment              TEXT,
+    created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (message_id, message_created_at) REFERENCES messages(id, created_at) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_feedback_message     ON message_feedback (message_id);
-CREATE INDEX IF NOT EXISTS idx_feedback_signal      ON message_feedback (signal_type, signal_value);
+CREATE INDEX IF NOT EXISTS idx_feedback_message ON message_feedback (message_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_signal  ON message_feedback (signal_type, signal_value);
 
--- Memory candidates is referenced by user_corrections.created_memory_id later.
--- Forward-declare line_memory and memory_candidates with minimal CREATE then
--- add FKs after both exist. (Postgres allows late-bound FKs only via ALTER.)
 CREATE TABLE IF NOT EXISTS line_memory (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     line_id             VARCHAR(50)  NOT NULL,
@@ -353,7 +398,8 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS user_corrections (
     id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    message_id           UUID         NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    message_id           UUID         NOT NULL,
+    message_created_at   TIMESTAMPTZ  NOT NULL,
     user_id              VARCHAR(255) REFERENCES user_profiles(id) ON DELETE SET NULL,
     correction_type      VARCHAR(50)  NOT NULL,
     original_claim       TEXT,
@@ -364,21 +410,25 @@ CREATE TABLE IF NOT EXISTS user_corrections (
     review_date          TIMESTAMPTZ,
     review_notes         TEXT,
     created_memory_id    UUID REFERENCES line_memory(id) ON DELETE SET NULL,
-    created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (message_id, message_created_at) REFERENCES messages(id, created_at) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_corrections_message ON user_corrections (message_id);
 CREATE INDEX IF NOT EXISTS idx_corrections_status  ON user_corrections (status);
 
 CREATE TABLE IF NOT EXISTS outcome_linkages (
-    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    message_id    UUID         NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-    outcome_type  VARCHAR(50)  NOT NULL,
-    outcome_id    UUID         NOT NULL,
-    outcome_table VARCHAR(50)  NOT NULL,
-    alignment     VARCHAR(20)  NOT NULL,
-    linked_by     VARCHAR(255),
-    notes         TEXT,
-    created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    message_id           UUID         NOT NULL,
+    message_created_at   TIMESTAMPTZ  NOT NULL,
+    outcome_type         VARCHAR(50)  NOT NULL CHECK (outcome_type IN
+                            ('downtime_event','quality_result','defect_event','work_order')),
+    outcome_id           UUID         NOT NULL,
+    outcome_table        VARCHAR(50)  NOT NULL,
+    alignment            VARCHAR(20)  NOT NULL,
+    linked_by            VARCHAR(255),
+    notes                TEXT,
+    created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (message_id, message_created_at) REFERENCES messages(id, created_at) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_outcomes_message ON outcome_linkages (message_id);
 CREATE INDEX IF NOT EXISTS idx_outcomes_outcome ON outcome_linkages (outcome_table, outcome_id);
@@ -402,17 +452,17 @@ CREATE TABLE IF NOT EXISTS memory_candidates (
 );
 CREATE INDEX IF NOT EXISTS idx_candidates_status ON memory_candidates (status, confidence_score DESC);
 
--- chunk_quality_signals is the v1 retrieval-feedback table; design §5.5 Flow 1
--- explicitly relies on it. Keep it.
 CREATE TABLE IF NOT EXISTS chunk_quality_signals (
     chunk_id        UUID PRIMARY KEY REFERENCES document_chunks(id) ON DELETE CASCADE,
     quality_score   NUMERIC      NOT NULL DEFAULT 0.0,
     sample_count    INTEGER      NOT NULL DEFAULT 0,
     last_updated    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
+COMMENT ON TABLE chunk_quality_signals IS
+    'Per-chunk retrieval feedback per TDD §5.5 Flow 1. Quality score in [0,1].';
 
 -- =============================================================================
--- Schema Group 6: ML Foundation (tables now, populated Phase 4)
+-- Schema Group 6: ML Foundation
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS ml_models (
@@ -448,8 +498,10 @@ CREATE TABLE IF NOT EXISTS ml_predictions (
     input_features      JSONB        NOT NULL DEFAULT '{}'::jsonb,
     actual_outcome      VARCHAR(50),
     outcome_recorded_at TIMESTAMPTZ,
-    message_id          UUID REFERENCES messages(id) ON DELETE SET NULL,
-    created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    message_id          UUID,
+    message_created_at  TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (message_id, message_created_at) REFERENCES messages(id, created_at) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_predictions_model_run ON ml_predictions (model_id, run_id);
 
@@ -515,25 +567,32 @@ CREATE TABLE IF NOT EXISTS business_rules (
 CREATE INDEX IF NOT EXISTS idx_rules_active_line ON business_rules (line_id, is_active);
 
 -- =============================================================================
--- Schema Group 8: Audit Log (append-only)
+-- Schema Group 8: Audit Log (append-only, partitioned, hash-chained)
 -- =============================================================================
 
+-- audit_log: PARTITIONED BY RANGE(created_at) inline. UUID PK with composite
+-- (id, created_at) for partition compatibility. audit_hash chains rows per
+-- TDD §14: SHA-256(prev_audit_hash || canonical_json(payload)).
 CREATE TABLE IF NOT EXISTS audit_log (
-    id          BIGSERIAL PRIMARY KEY,
+    id          UUID         NOT NULL DEFAULT uuid_generate_v4(),
     event_type  VARCHAR(50)  NOT NULL,
     user_id     VARCHAR(255),
     session_id  VARCHAR(255),
     entity_type VARCHAR(50),
     entity_id   VARCHAR(255),
     details     JSONB        NOT NULL DEFAULT '{}'::jsonb,
-    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_audit_event_time  ON audit_log (event_type, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_audit_user_time   ON audit_log (user_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_audit_entity      ON audit_log (entity_type, entity_id);
+    audit_hash  TEXT,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (id, created_at)
+) PARTITION BY RANGE (created_at);
 
--- Enforce append-only at the application layer; also block UPDATE/DELETE here
--- so an out-of-band actor can't tamper.
+CREATE TABLE IF NOT EXISTS audit_log_default PARTITION OF audit_log DEFAULT;
+
+CREATE INDEX IF NOT EXISTS idx_audit_event_time ON audit_log (event_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_user_time  ON audit_log (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_entity     ON audit_log (entity_type, entity_id);
+
+-- Append-only enforcement at the DB layer.
 CREATE OR REPLACE FUNCTION audit_log_immutable() RETURNS TRIGGER AS $$
 BEGIN
     RAISE EXCEPTION 'audit_log is append-only';
@@ -571,6 +630,21 @@ CREATE TABLE IF NOT EXISTS tag_registry (
 CREATE INDEX IF NOT EXISTS idx_tagreg_class  ON tag_registry (discovered_class);
 CREATE INDEX IF NOT EXISTS idx_tagreg_active ON tag_registry (is_active);
 CREATE INDEX IF NOT EXISTS idx_tagreg_tier   ON tag_registry (tier);
+COMMENT ON TABLE tag_registry IS
+    'Discovered tag metadata cache from Ignition gateway (Ch 15 SCAFFOLD; populated by tag-discovery job).';
+
+-- =============================================================================
+-- Views (TDD §5.1)
+-- =============================================================================
+
+-- v_messages_recent: last-7-day messages JOINed to conversations.
+CREATE OR REPLACE VIEW v_messages_recent AS
+SELECT
+    m.id, m.created_at, m.role, m.content, m.confidence_label,
+    m.conversation_id, c.session_id, c.user_id, c.line_id
+FROM messages m
+JOIN conversations c ON c.id = m.conversation_id
+WHERE m.created_at >= NOW() - INTERVAL '7 days';
 
 -- =============================================================================
 -- updated_at triggers

@@ -282,7 +282,7 @@ async def _t_defect_events_in_window(
         params["equipment"] = equipment
 
     sql = text(f"""
-        SELECT d.id::text AS id, d.detected_time, d.failure_mode, d.severity,
+        SELECT d.id::text AS id, d.detected_time, d.fm_code AS failure_mode, d.severity,
                pr.run_number, pr.product_style, pr.front_step
         FROM defect_events d
         LEFT JOIN production_runs pr ON pr.id = d.run_id

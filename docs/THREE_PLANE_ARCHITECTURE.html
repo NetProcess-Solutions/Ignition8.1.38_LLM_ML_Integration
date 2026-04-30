@@ -1,0 +1,290 @@
+<!doctype html><html><head><meta charset='utf-8'><title>Three Plane Architecture</title><style>
+@page { size: Letter; margin: 0.6in 0.65in 0.7in 0.65in; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body {
+  font-family: 'Calibri', 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 10.5pt; line-height: 1.4; color: #1a1a1a; margin: 0;
+}
+h1 { font-size: 18pt; color: #14365c; margin: 0 0 6pt 0; border-bottom: 2pt solid #14365c; padding-bottom: 4pt; }
+h2 { font-size: 13pt; color: #14365c; margin: 14pt 0 4pt 0; border-bottom: 1pt solid #c8d3e0; padding-bottom: 2pt; }
+h3 { font-size: 11pt; color: #1f4a80; margin: 10pt 0 3pt 0; }
+p, li { margin: 3pt 0; }
+ul, ol { margin: 3pt 0 6pt 0; padding-left: 22pt; }
+code { font-family: 'Consolas', 'Courier New', monospace; font-size: 9.2pt;
+       background: #f3f4f6; padding: 0 3pt; border-radius: 2pt; }
+pre { font-family: 'Consolas', 'Courier New', monospace; font-size: 8.6pt;
+      line-height: 1.25; background: #f3f4f6; border: 1pt solid #d8dde3;
+      border-radius: 3pt; padding: 6pt 8pt; overflow-x: auto;
+      page-break-inside: avoid; white-space: pre; }
+blockquote { border-left: 3pt solid #14365c; background: #eef3fa;
+             margin: 6pt 0; padding: 4pt 10pt; color: #2a2a2a; }
+table { border-collapse: collapse; margin: 6pt 0; width: 100%;
+        page-break-inside: avoid; font-size: 9.5pt; }
+th, td { border: 1pt solid #c8d3e0; padding: 3pt 6pt; text-align: left;
+         vertical-align: top; }
+th { background: #14365c; color: #fff; font-weight: bold; }
+tr:nth-child(even) td { background: #f7f9fc; }
+hr { border: 0; border-top: 1pt solid #c8d3e0; margin: 10pt 0; }
+strong { color: #14365c; }
+a { color: #14365c; text-decoration: none; }
+</style></head><body><h1 id="three-plane-architecture-operationalization-target">Three-Plane Architecture (operationalization target)</h1>
+<blockquote>
+<p><strong>Status:</strong> target architecture for Shaw operationalization. Reflects
+the director's guidance: split standard functions (MCP tool servers)
+from orchestration (agentic harness), and centralize data-plane
+complexity on the enterprise standard. The current MVP collapses all
+three planes into one FastAPI service + local Postgres for prototyping
+velocity; this document describes the target so the migration path is
+explicit.</p>
+<p>Companion to <a href="system_boundary.md"><code>system_boundary.md</code></a> and
+<a href="architecture.md"><code>architecture.md</code></a>. The boundary contract in those
+documents is unchanged.</p>
+</blockquote>
+<hr>
+<h2 id="1-why-three-planes">1. Why three planes</h2>
+<p>The v3.0 system boundary diagram draws the world as <strong>inside Ignition</strong> vs.
+<strong>outside Ignition</strong>. That boundary is correct and load-bearing — control
+authority stops at the gateway. But the <em>outside</em> side has internal
+structure that matters for IT operationalization:</p>
+<ol>
+<li><strong>Agentic harness</strong> — orchestration only. Owns request lifecycle, anchor
+   parsing, phase routing, RCA chain control, response validation.
+   Stateless. Provider-agnostic about every downstream dependency.</li>
+<li><strong>MCP tool servers</strong> — deterministic functions, wrapped behind the Model
+   Context Protocol so they are discoverable, callable, and reusable by
+   <em>any</em> model client (this advisor today, other Shaw AI projects
+   tomorrow).</li>
+<li><strong>Data plane</strong> — relational tables, vector search, ML feature store,
+   immutable audit. The platform IT has standardized on
+   (Databricks / enterprise RDBMS / etc.).</li>
+</ol>
+<p>Splitting these three concerns has three concrete benefits:</p>
+<ul>
+<li><strong>Each plane can be operationalized independently.</strong> The agentic harness
+  can run on one approved host; the tool servers on another; the data plane
+  on the platform IT has already invested in.</li>
+<li><strong>The MCP tool layer becomes a Shaw asset, not a Coater 1 asset.</strong> Any
+  future Shaw AI project that needs <code>percentile_of</code> against the historical
+  distribution gets it for free.</li>
+<li><strong>The data plane is no longer special.</strong> It is just "the enterprise data
+  platform with vector capability" — whatever Shaw says that is.</li>
+</ul>
+<hr>
+<h2 id="2-the-three-planes">2. The three planes</h2>
+<h3 id="21-ignition-ot-read-only-unchanged">2.1 Ignition (OT, read-only) — unchanged</h3>
+<p>Same as <code>system_boundary.md</code> §2. Native Jython, native gateway APIs, no
+external dependencies. Curated context construction and identity stay here.</p>
+<h3 id="22-agentic-harness-it-orchestration-only">2.2 Agentic harness (IT, orchestration only)</h3>
+<p>The harness owns the <strong>three-phase request lifecycle</strong> but delegates <em>every</em>
+deterministic computation to MCP tools and <em>every</em> persistence concern to
+the data plane.</p>
+<pre><code>handle_chat(curated_context, query, user)
+  ├── Phase 1 (pre-LLM)
+  │     ├── parse_anchor(query)               ← in-process (cheap, no IO)
+  │     ├── if control verb        → refuse + audit
+  │     ├── if ambiguous           → clarify
+  │     ├── retrieval              → MCP tool: hybrid_retrieve
+  │     ├── change_ledger          → MCP tool: change_ledger
+  │     ├── anomaly_check          → MCP tool: anomaly_check
+  │     ├── rules_eval             → MCP tool: rules_eval
+  │     ├── line_memory_lookup     → MCP tool: memory_search
+  │     └── if insufficient        → templated refusal + audit
+  │
+  ├── Phase 2 (LLM)
+  │     ├── two-step RCA chain (orchestrated here)
+  │     │     ├── step 1: hypothesise (LLM, no tools)
+  │     │     └── step 2: adjudicate (LLM + MCP tools, bounded budget)
+  │     └── response_parser
+  │           ├── enforce citations
+  │           ├── strip uncited claims
+  │           └── apply confidence label
+  │
+  └── Phase 3 (persist)
+        ├── data_plane.write_message(snapshot)
+        ├── data_plane.append_audit(hash_chain)
+        └── data_plane.intake_feedback_hooks()
+</code></pre>
+<p>What lives in the harness, and <em>only</em> the harness:
+- Anchor parsing and control-verb refusal logic.
+- Phase routing (when to short-circuit, when to call the model, when to run
+  the RCA chain instead of single-shot RAG).
+- Tool-call orchestration and budget enforcement.
+- Response parsing, citation enforcement, confidence labeling.
+- Hash-chain construction (the cryptographic discipline; the <em>storage</em> is
+  the data plane).</p>
+<p>What does <strong>not</strong> live in the harness:
+- SQL. No direct DB calls. Everything goes through <code>data_plane</code>.
+- Deterministic math. No <code>percentile_of</code>, no drift detection, no
+  distribution comparison written here. All MCP tools.
+- Model invocation specifics. One adapter, one config switch.</p>
+<h3 id="23-mcp-tool-servers-it-reusable">2.3 MCP tool servers (IT, reusable)</h3>
+<p>Every "standard function/method" — pure, read-only, deterministic — is
+exposed as an MCP tool. Today's tools, mapped:</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>What it computes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>percentile_of</code></td>
+<td>Empirical CDF lookup for a tag value, scoped by recipe</td>
+</tr>
+<tr>
+<td><code>compare_to_distribution</code></td>
+<td>Percentile + nearest-runs + outcome summary</td>
+</tr>
+<tr>
+<td><code>nearest_historical_runs</code></td>
+<td>k nearest production runs by fingerprint</td>
+</tr>
+<tr>
+<td><code>detect_drift</code></td>
+<td>Page-Hinkley CUSUM drift check on a tag's recent series</td>
+</tr>
+<tr>
+<td><code>defect_events_in_window</code></td>
+<td>Bounded read of defect events with grouping</td>
+</tr>
+<tr>
+<td><code>change_ledger</code></td>
+<td>What changed since baseline (recipe, crew, equipment)</td>
+</tr>
+<tr>
+<td><code>anomaly_check</code></td>
+<td>Multivariate Mahalanobis check on the curated tag block</td>
+</tr>
+<tr>
+<td><code>rules_eval</code></td>
+<td>Evaluate declarative YAML rules against a tag snapshot</td>
+</tr>
+<tr>
+<td><code>hybrid_retrieve</code></td>
+<td>Vector + BM25 + RRF + MMR over the document corpus</td>
+</tr>
+<tr>
+<td><code>memory_search</code></td>
+<td>Read approved line-memory entries by similarity</td>
+</tr>
+</tbody>
+</table>
+<p>Properties every tool inherits by being an MCP server:
+- <strong>Discoverable</strong> — clients enumerate the tool list and JSON schemas.
+- <strong>Callable from any model client</strong> — not coupled to this harness.
+- <strong>Independently versionable</strong> — bumping a tool's schema is a server
+  release, not a harness release.
+- <strong>Independently observable</strong> — each tool server emits its own metrics.
+- <strong>Independently governable</strong> — Shaw can audit, allowlist, or sandbox each
+  tool server separately.</p>
+<p>Hosting model is IT's call: one MCP server per tool, one server per
+<em>family</em> of tools, or one server hosting all of them. The harness only
+needs the server URL(s) and credentials.</p>
+<h3 id="24-data-plane-it-enterprise-standard">2.4 Data plane (IT, enterprise standard)</h3>
+<p>The data plane is whatever Shaw has standardized on (likely Databricks).
+The harness sees it through one adapter (<code>service/db/data_plane.py</code>)
+that exposes:</p>
+<ul>
+<li>Relational reads/writes against the schema in <code>data_model.md</code>.</li>
+<li>Vector similarity search (used by the <code>hybrid_retrieve</code> tool).</li>
+<li>ML feature snapshots (used by anomaly model refit jobs).</li>
+<li>Append-only audit with platform-enforced immutability.</li>
+<li>Scheduled jobs (outcome closure, anomaly refit, WO sync, ingestion).</li>
+</ul>
+<p>What the data plane must support, regardless of platform:
+1. Relational tables matching <code>data_model.md</code>.
+2. k-NN vector similarity over chunk and memory embeddings.
+3. Trigram/BM25-style keyword search.
+4. Append-only audit table with platform-enforced UPDATE/DELETE block.
+5. Partitioning + retention on high-volume tables.
+6. Scheduled job runtime.</p>
+<p>If the chosen platform splits these across two systems (e.g. RDBMS for
+OLTP + Vector Search service for retrieval), the adapter handles the
+fan-out. The harness does not know.</p>
+<hr>
+<h2 id="3-migration-path-from-mvp-to-three-plane">3. Migration path from MVP to three-plane</h2>
+<p>The MVP collapses all three planes into one FastAPI service + local
+PostgreSQL. The migration is incremental and does not require a rewrite.</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Action</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Stand up the data-plane adapter <code>service/db/data_plane.py</code> so harness no longer talks to a specific DB driver</td>
+<td>scaffolded — see §4</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Wrap deterministic tools as an MCP server (<code>service/mcp/</code>)</td>
+<td>scaffolded — see §5</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Switch harness to call the local MCP server in-process</td>
+<td>next sprint</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Point data-plane adapter at the Shaw-approved store</td>
+<td>post-IT-meeting</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Promote MCP server to its own host</td>
+<td>post-IT-meeting</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Decommission local Postgres</td>
+<td>once parity verified</td>
+</tr>
+</tbody>
+</table>
+<p>Each step is independently testable. Steps 1–2 are reversible (the harness
+can fall back to direct calls). Steps 3–6 are the actual operationalization.</p>
+<hr>
+<h2 id="4-the-data-plane-adapter">4. The data-plane adapter</h2>
+<p>Single seam. See <a href="../service/db/data_plane.py"><code>service/db/data_plane.py</code></a>.</p>
+<p>The adapter is a typed protocol that the harness depends on. Today it has
+one implementation (<code>PostgresDataPlane</code>). Future implementations
+(<code>DatabricksDataPlane</code>, etc.) plug in behind the same protocol with no
+changes upstream.</p>
+<p>The point is <strong>not</strong> to abstract away SQL prematurely. The point is to
+make the boundary explicit so the IT meeting can answer "where does this
+plane live?" without us having to point at a hundred call sites.</p>
+<hr>
+<h2 id="5-the-mcp-tool-server-scaffold">5. The MCP tool server scaffold</h2>
+<p>See <a href="../service/mcp/"><code>service/mcp/</code></a>. The scaffold:</p>
+<ul>
+<li>Reuses the existing tool implementations in
+  <a href="../service/services/tools.py"><code>service/services/tools.py</code></a> — no logic
+  duplication.</li>
+<li>Exposes them via the MCP protocol (transport-agnostic — stdio for local
+  development, HTTP/SSE for hosted deployment).</li>
+<li>Is independently runnable: <code>python -m mcp.server</code>.</li>
+<li>Has a deliberately thin handler layer; all behavior lives in the
+  underlying functions.</li>
+</ul>
+<p>This is the <em>evidence</em> you bring to the IT meeting that the split is real,
+not a slide. "The tool server is already running locally; we need a host
+for it that other Shaw AI projects can also reach."</p>
+<hr>
+<h2 id="6-what-stays-the-same-across-all-stacks">6. What stays the same across all stacks</h2>
+<ul>
+<li>The boundary contract (Ignition ↔ outside) in
+  <a href="system_boundary.md"><code>system_boundary.md</code></a> §4.</li>
+<li>The three-phase request lifecycle.</li>
+<li>Refusal-first behavior on insufficient evidence.</li>
+<li>Mandatory citations with downgrade-on-no-citation.</li>
+<li>Confidence labels.</li>
+<li>Audit immutability.</li>
+<li>Provider-agnostic LLM adapter.</li>
+</ul>
+<p>These are the architectural contracts. Everything else is implementation.</p></body></html>

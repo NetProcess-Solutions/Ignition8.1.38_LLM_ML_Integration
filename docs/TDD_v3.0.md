@@ -45,7 +45,7 @@ date: "April 2026"
 |--------:|--------------|---------------|---------------------------------|---------------------------------------------------------------------------|
 |     1.0 | January 2026 | Jordan Taylor | Superseded                      | Initial proposal: schema sketch, RAG pipeline, conversation logging.      |
 |     2.0 | April 2026   | Jordan Taylor | Superseded by v3.0              | 59-page design specification with 29-table schema and anchor-conditional context assembly. |
-| **3.0** | **April 23, 2026** | **Jordan Taylor** | **Current — As-Built**     | **This document. Reflects shipped code at 145 passing tests / 0 failing.** |
+| **3.0** | **April 23, 2026** | **Jordan Taylor** | **Current — As-Built**     | **This document. Reflects shipped code at 155 passing tests / 0 failing.** |
 
 Version 2.0 was an *aspirational design document*. It described the system the way
 it should be built. Version 3.0 — this document — is the *as-built reference*. It
@@ -162,7 +162,7 @@ answers operator and engineer questions about Coater 1 using live tag data,
 historian aggregates, maintenance and quality records, downtime and defect
 events, deterministic process rules, distributional baselines, and curated
 line memory. Every response is source-cited, confidence-labeled, and fully
-auditable. The system is shipped — 145 tests pass, 0 fail, 2 skip; the
+auditable. The system is shipped — 155 tests pass, 0 fail, 2 skip; the
 schema is built; the RAG pipeline runs end-to-end; the gateway integration
 spec is documented and templates are in place; only the operator-side
 "go-live" steps in §3 of `docs/GAP_ANALYSIS.md` remain.
@@ -306,7 +306,7 @@ Symphony API endpoint and auth credentials are wired in. Schema
 (`event_clips` table) is in place from day one so live wiring is purely an
 adapter swap.
 
-The full schema (29 tables across 9 domains plus a 30th `failure_modes`
+The full schema (30 tables across 9 domains, including the `failure_modes`
 reference table that backs the closed enum) is provisioned by
 `scripts/setup_database.sql` on first container start.
 
@@ -1492,10 +1492,12 @@ into this table.
 
 **`prompt_versions`**: every system prompt that has ever been active.
 `prompt_id UUID PK`, `prompt_name TEXT`, `version TEXT`, `body TEXT`,
-`is_active BOOL`, `activated_at TIMESTAMPTZ`. Currently registered prompts:
-`system_prompt_v1` (deprecated), `system_prompt_v2` (active), `rca_step1_v1`,
-`rca_step2_v1`. Every `messages.prompt_version` row references the version
-string, enabling per-prompt-version A/B analysis.
+`is_active BOOL`, `activated_at TIMESTAMPTZ`. Lookup pattern is
+`(prompt_name, is_active=TRUE)` — the active version is selected by the
+`is_active` flag, not by versioned naming. Currently seeded:
+`system_prompt` (versions `v1` deprecated, `v2` active), `rca_step1` (`v1`),
+`rca_step2` (`v1`). Every `messages.prompt_version` row references the
+version string, enabling per-prompt-version A/B analysis.
 
 **`business_rules`**: declarative YAML rules surfaced via
 [service/services/rules.py](service/services/rules.py). Columns:
@@ -3382,7 +3384,7 @@ it helps" decision, not a "we ran out of time" descope.
 
 ## 12.5 Test Inventory at Cut
 
-145 tests passing, 2 skipped, 0 failing as of the v3.0 cut commit.
+155 tests passing, 2 skipped, 0 failing as of the v3.0 cut commit.
 Per-area breakdown in chapter 16.
 
 <div class="delta-box">
@@ -4124,7 +4126,7 @@ could be per-tag-class).</p>
 
 # 16. Testing & Validation
 
-145 tests passing, 2 skipped, 0 failing as of the v3.0 cut commit.
+155 tests passing, 2 skipped, 0 failing as of the v3.0 cut commit.
 This chapter is the inventory: what the test suite covers, what it
 doesn't, what's mocked vs in-memory vs real, and what the validation
 gaps are heading into pilot.
@@ -4136,7 +4138,7 @@ locally:
 ```
 cd service
 pytest -q
-# 145 passed, 2 skipped in 14.32s
+# 155 passed, 2 skipped in 1.95s
 ```
 
 ## 16.1 Coverage by Service
@@ -4156,7 +4158,8 @@ pytest -q
 | Prompt regression           | `test_prompt_regression.py`                        | 6     | All pass |
 | RCA chain (E2E)             | `test_rca_e2e.py`, `test_rca.py`                   | 17    | All pass |
 | Retrieval (hybrid)          | `test_retrieval_hybrid.py` *(implied; full pipeline)*| 35   | All pass |
-| **Total**                   |                                                    | **145+2 skipped** | **0 failing** |
+| Audit hash chain (F-01)     | `test_audit_chain.py`                              | 7     | All pass |
+| **Total**                   |                                                    | **155+2 skipped** | **0 failing** |
 
 ## 16.2 What's Mocked, What's Real
 
@@ -4309,10 +4312,10 @@ operator-provisioned (or compose-supplied for dev).
 <p class="delta-title">Δ vs v2.0 — Testing & Validation</p>
 <p><span class="label">Stayed:</span> pytest-based unit + integration
 suite. The intent to gate releases on green CI.</p>
-<p><span class="label">Changed:</span> 145 tests passing (was ~92 at
+<p><span class="label">Changed:</span> 155 tests passing (was ~92 at
 v2.0 baseline). New coverage for: tool loop (B0.5), RCA chain (B8),
 change ledger (B9), anomaly (B7), local LLM client (B12), prompt
-regression. Documented mocked-vs-real boundary; documented integration
+regression, audit_hash chain (F-01). Documented mocked-vs-real boundary; documented integration
 test skip + how to enable; documented the labeled-corpus blocker on B13.</p>
 <p><span class="label">Considering:</span> A real-Postgres CI matrix
 job (`pgvector/pgvector:pg16` container in CI). A 24-hour soak job in
@@ -5072,7 +5075,7 @@ subsystem. Defaults shown are the as-built v3.0 values.
 
 # Appendix C — Test Catalog
 
-The 145 passing + 2 skipped tests in `service/tests/`, grouped by the
+The 155 passing + 2 skipped tests in `service/tests/`, grouped by the
 service area they cover. Each entry: file → brief purpose. See
 chapter 16 for the testing strategy and mocked-vs-real boundary.
 

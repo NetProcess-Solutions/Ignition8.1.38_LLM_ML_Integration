@@ -55,7 +55,8 @@ BEGIN
             role               VARCHAR(20)  NOT NULL,
             content            TEXT         NOT NULL,
             sources            JSONB        NOT NULL DEFAULT '[]'::jsonb,
-            confidence         VARCHAR(20),
+            confidence_label   VARCHAR(32)  CHECK (confidence_label IN
+                                ('confirmed','likely','hypothesis','insufficient_evidence')),
             context_snapshot   JSONB        NOT NULL DEFAULT '{}'::jsonb,
             prompt_version     VARCHAR(50),
             model_name         VARCHAR(100),
@@ -194,5 +195,23 @@ $$;
 --    SELECT partman.run_maintenance(p_analyze := false);
 --
 -- It will (a) create new monthly partitions per `premake`, and
---          (b) drop expired audit_log partitions per the retention rule.
+--          (b) drop expired audit_log + messages partitions per retention.
 -- ---------------------------------------------------------------------------
+
+-- F-15 / D4: messages 24-month retention (symmetric with audit_log).
+-- Greenfield-safe: the partman.part_config row exists once create_parent
+-- has been called (above for legacy migrations, or by a one-shot register
+-- on already-partitioned greenfield tables — see runbook).
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM partman.part_config WHERE parent_table = 'public.messages') THEN
+        UPDATE partman.part_config
+            SET retention            = '24 months',
+                retention_keep_table = false,
+                retention_keep_index = false
+            WHERE parent_table = 'public.messages';
+    END IF;
+END $$;
+
+INSERT INTO schema_migrations (version) VALUES ('001_partition_messages')
+    ON CONFLICT DO NOTHING;

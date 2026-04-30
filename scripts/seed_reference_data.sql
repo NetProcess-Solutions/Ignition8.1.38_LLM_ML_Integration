@@ -1,5 +1,5 @@
 -- =============================================================================
--- IgnitionChatbot v2.0 reference data seed
+-- IgnitionChatbot v3.0 reference data seed
 -- Runs once at first DB init via docker-entrypoint-initdb.d/02_*.
 -- Application-data seeds (memories, prompts, rules) live in
 -- service/scripts/seed_initial_data.py and run after the embedding model
@@ -8,11 +8,11 @@
 
 -- ----------------------------------------------------------------------------
 -- failure_modes (closed enum, design §4.3 taxonomy discipline note)
--- Adding a new mode here is the only way defect_events.failure_mode can
+-- Adding a new mode here is the only way defect_events.fm_code can
 -- accept it (FK is RESTRICT). Initial set drawn from the design's
 -- examples; expand via Task 9 from real DELAM/QR records.
 -- ----------------------------------------------------------------------------
-INSERT INTO failure_modes (code, label, defect_type, description) VALUES
+INSERT INTO failure_modes (fm_code, label, defect_type, description) VALUES
     ('delam_hotpull',       'Delamination (hot pull)',         'delamination',         'Bond failure detected on hot-pull lab test'),
     ('delam_cold',          'Delamination (cold)',             'delamination',         'Bond failure visible at ambient temperature'),
     ('off_tenter_edge_fold','Off-tenter, edge fold',           'off_tenter',           'Edge fold under tenter clip'),
@@ -22,7 +22,7 @@ INSERT INTO failure_modes (code, label, defect_type, description) VALUES
     ('cw_out_of_spec',      'Coating weight out of spec',      'thickness_deviation',  'Inline or lab CW measurement outside spec'),
     ('contamination_other', 'Contamination (other)',           'contamination',        'Contamination not classified elsewhere'),
     ('other',               'Other / unclassified',            'other',                'Catch-all; should be re-classified by engineer review')
-ON CONFLICT (code) DO NOTHING;
+ON CONFLICT (fm_code) DO NOTHING;
 
 -- ----------------------------------------------------------------------------
 -- user_permissions matrix (design §4.6)

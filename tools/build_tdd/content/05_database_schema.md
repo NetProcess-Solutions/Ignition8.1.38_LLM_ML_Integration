@@ -110,10 +110,12 @@ into this table.
 
 **`prompt_versions`**: every system prompt that has ever been active.
 `prompt_id UUID PK`, `prompt_name TEXT`, `version TEXT`, `body TEXT`,
-`is_active BOOL`, `activated_at TIMESTAMPTZ`. Currently registered prompts:
-`system_prompt_v1` (deprecated), `system_prompt_v2` (active), `rca_step1_v1`,
-`rca_step2_v1`. Every `messages.prompt_version` row references the version
-string, enabling per-prompt-version A/B analysis.
+`is_active BOOL`, `activated_at TIMESTAMPTZ`. Lookup pattern is
+`(prompt_name, is_active=TRUE)` — the active version is selected by the
+`is_active` flag, not by versioned naming. Currently seeded:
+`system_prompt` (versions `v1` deprecated, `v2` active), `rca_step1` (`v1`),
+`rca_step2` (`v1`). Every `messages.prompt_version` row references the
+version string, enabling per-prompt-version A/B analysis.
 
 **`business_rules`**: declarative YAML rules surfaced via
 [service/services/rules.py](service/services/rules.py). Columns:

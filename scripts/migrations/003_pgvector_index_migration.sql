@@ -24,6 +24,9 @@ SELECT
 COMMENT ON VIEW v_pgvector_index_status IS
     'Sprint 2 / A3.3 — alert helper for pgvector index migration.';
 
+INSERT INTO schema_migrations (version) VALUES ('003_pgvector_index_migration')
+    ON CONFLICT DO NOTHING;
+
 -- -----------------------------------------------------------------------------
 -- Operator-run DDL (DO NOT auto-execute):
 --

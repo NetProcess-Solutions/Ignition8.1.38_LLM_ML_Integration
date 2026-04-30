@@ -234,7 +234,7 @@ foundation for the predictive ML program — without a second project.
 
 ## Current build status
 
-148 tests passing, 0 failing. Core capabilities — including multivariate
+155 tests passing, 0 failing. Core capabilities — including multivariate
 anomaly detection, the 2‑step RCA chain, change ledger, outcome closure,
 hybrid retrieval, and the local‑LLM provider — are shipped and covered
 by tests. Quality‑polish items (cross‑encoder reranker, HyDE,

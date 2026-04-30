@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     db_pool_size: int = 10
     db_max_overflow: int = 5
 
+    # Data plane backend (three-plane architecture, see
+    # docs/THREE_PLANE_ARCHITECTURE.md). The harness depends on the
+    # `DataPlane` Protocol in `db/data_plane.py`; this switch chooses
+    # the implementation. `databricks` is a placeholder pending IT
+    # confirmation of platform + credentials.
+    data_plane_backend: Literal["postgres", "databricks"] = "postgres"
+
     # LLM
     llm_provider: Literal["openai", "azure_openai", "local"] = "openai"
     openai_api_key: str = ""

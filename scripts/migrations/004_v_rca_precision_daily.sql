@@ -36,3 +36,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_v_rca_precision_daily_pk
 
 CREATE INDEX IF NOT EXISTS idx_v_rca_precision_daily_fm
     ON v_rca_precision_daily (failure_mode);
+
+INSERT INTO schema_migrations (version) VALUES ('004_v_rca_precision_daily')
+    ON CONFLICT DO NOTHING;

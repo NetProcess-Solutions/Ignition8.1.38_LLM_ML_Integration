@@ -121,13 +121,13 @@ async def get_failure_mode_matched_runs(
             r.start_time,
             r.end_time,
             d.id          AS defect_id,
-            d.failure_mode,
+            d.fm_code,
             d.detected_time
         FROM defect_events d
         JOIN production_runs r ON r.id = d.run_id
         WHERE r.line_id = :line
           AND r.product_style = :style
-          AND d.failure_mode = :fm
+          AND d.fm_code = :fm
           AND (:before IS NULL OR d.detected_time < :before)
         ORDER BY d.detected_time DESC
         LIMIT :lim

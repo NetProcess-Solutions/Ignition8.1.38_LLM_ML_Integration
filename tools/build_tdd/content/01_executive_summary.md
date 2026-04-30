@@ -7,7 +7,7 @@ answers operator and engineer questions about Coater 1 using live tag data,
 historian aggregates, maintenance and quality records, downtime and defect
 events, deterministic process rules, distributional baselines, and curated
 line memory. Every response is source-cited, confidence-labeled, and fully
-auditable. The system is shipped — 145 tests pass, 0 fail, 2 skip; the
+auditable. The system is shipped — 155 tests pass, 0 fail, 2 skip; the
 schema is built; the RAG pipeline runs end-to-end; the gateway integration
 spec is documented and templates are in place; only the operator-side
 "go-live" steps in §3 of `docs/GAP_ANALYSIS.md` remain.
@@ -151,7 +151,7 @@ Symphony API endpoint and auth credentials are wired in. Schema
 (`event_clips` table) is in place from day one so live wiring is purely an
 adapter swap.
 
-The full schema (29 tables across 9 domains plus a 30th `failure_modes`
+The full schema (30 tables across 9 domains, including the `failure_modes`
 reference table that backs the closed enum) is provisioned by
 `scripts/setup_database.sql` on first container start.
 
